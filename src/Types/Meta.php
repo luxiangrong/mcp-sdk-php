@@ -41,6 +41,6 @@ class Meta implements McpModel {
 
     public function jsonSerialize(): mixed {
         // Return only extra fields, since there are no defined properties
-        return $this->extraFields;
+        return empty($this->extraFields) ? new \stdClass() : $this->extraFields;
     }
 }
