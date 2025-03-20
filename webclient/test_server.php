@@ -16,14 +16,14 @@
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  *
- * @package    logiscape/mcp-sdk-php 
+ * @package    logiscape/mcp-sdk-php
  * @author     Josh Abbott <https://joshabbott.com>
  * @copyright  Logiscape LLC
  * @license    MIT License
  * @link       https://github.com/logiscape/mcp-sdk-php
  */
- 
- /**
+
+/**
  * A MCP server with example prompts, tools, and resources for testing
  */
 
@@ -45,7 +45,9 @@ use Mcp\Types\ToolInputProperties;
 use Mcp\Types\ListToolsResult;
 use Mcp\Types\CallToolResult;
 use Mcp\Types\Resource;
+use Mcp\Types\ResourceTemplate;
 use Mcp\Types\ListResourcesResult;
+use Mcp\Types\ListResourceTemplatesResult;
 use Mcp\Types\ReadResourceResult;
 use Mcp\Types\TextResourceContents;
 
@@ -125,7 +127,7 @@ $server->registerHandler('tools/list', function($params) {
         description: 'Adds two numbers together',
         inputSchema: $inputSchema
     );
-    
+
     return new ListToolsResult([$tool]);
 });
 
@@ -184,8 +186,39 @@ $server->registerHandler('resources/read', function($params) {
     );
 });
 
+// Add resource template handlers
+$server->registerHandler('resources/templates/list', function($params) {
+    // Create properties object first
+    $properties = ToolInputProperties::fromArray([
+        'name' => [
+            'type' => 'string',
+            'description' => 'Name of the person to greet'
+        ]
+    ]);
+
+    // Create schema with properties and required fields
+    $inputSchema = new ToolInputSchema(
+        properties: $properties,
+        required: ['name']
+    );
+
+    // Create template instance with variable placeholder and schema
+    $template = new ResourceTemplate(
+        name: 'get_greeting',
+        uriTemplate: 'greeting://{name}',
+        description: 'Get a personalized greeting',
+        mimeType: 'text/plain'
+    );
+    $template->inputSchema = $inputSchema;
+
+    return new ListResourceTemplatesResult([$template]);
+});
+
 // Create initialization options and run server
-$initOptions = $server->createInitializationOptions();
+$notificationOptions = new \Mcp\Server\NotificationOptions(
+    resourcesChanged: true
+);
+$initOptions = $server->createInitializationOptions($notificationOptions);
 $runner = new ServerRunner($server, $initOptions);
 
 $runner->run();
