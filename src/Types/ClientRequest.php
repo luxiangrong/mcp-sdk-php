@@ -69,7 +69,8 @@ class ClientRequest implements McpModel {
             $request instanceof ListToolsRequest ||
             $request instanceof CallToolRequest ||
             $request instanceof SetLevelRequest ||
-            $request instanceof CompleteRequest
+            $request instanceof CompleteRequest ||
+            $request instanceof ListTemplatesRequest
         )) {
             throw new \InvalidArgumentException('Invalid client request type');
         }
@@ -97,6 +98,7 @@ class ClientRequest implements McpModel {
             'resources/read' => self::createReadResourceRequest($params),
             'resources/subscribe' => self::createSubscribeRequest($params),
             'resources/unsubscribe' => self::createUnsubscribeRequest($params),
+            'resources/templates/list' => self::createListTemplatesRequest($params),
             'tools/call' => self::createCallToolRequest($params),
             'tools/list' => self::createListToolsRequest($params),
             default => throw new \InvalidArgumentException("Unknown client request method: $method")
@@ -106,16 +108,16 @@ class ClientRequest implements McpModel {
     private static function createInitializeRequest(array $params): self {
         // Handle capabilities
         $capParams = $params['capabilities'] ?? [];
-    
+
         // ExperimentalCapabilities
         $experimental = null;
         if (isset($capParams['experimental'])) {
             $experimental = new ExperimentalCapabilities();
             foreach ($capParams['experimental'] as $k => $v) {
-                $experimental->$k = $v; 
+                $experimental->$k = $v;
             }
         }
-    
+
         // ClientRootsCapability
         $roots = null;
         if (isset($capParams['roots'])) {
@@ -127,7 +129,7 @@ class ClientRequest implements McpModel {
                 $roots->$k = $v;
             }
         }
-    
+
         // SamplingCapability
         $sampling = null;
         if (isset($capParams['sampling'])) {
@@ -137,13 +139,13 @@ class ClientRequest implements McpModel {
                 $sampling->$k = $v;
             }
         }
-    
+
         $capabilities = new ClientCapabilities(
             roots: $roots,
             sampling: $sampling,
             experimental: $experimental
         );
-    
+
         // Implementation
         if (!isset($params['clientInfo']['name'], $params['clientInfo']['version'])) {
             throw new \InvalidArgumentException('clientInfo must have name and version.');
@@ -152,18 +154,18 @@ class ClientRequest implements McpModel {
             name: $params['clientInfo']['name'],
             version: $params['clientInfo']['version']
         );
-    
+
         if (empty($params['protocolVersion'])) {
             throw new \InvalidArgumentException('protocolVersion is required for initialize.');
         }
-    
+
         $initializeParams = new InitializeRequestParams(
             protocolVersion: $params['protocolVersion'],
             capabilities: $capabilities,
             clientInfo: $clientInfo,
             _meta: $params['_meta'] ?? null
         );
-    
+
         return new self(new InitializeRequest($initializeParams));
     }
 
@@ -261,6 +263,11 @@ class ClientRequest implements McpModel {
         }
 
         return new self(new CallToolRequest($params['name'], $arguments));
+    }
+
+    private static function createListTemplatesRequest(array $params): self {
+        $cursor = $params['cursor'] ?? null;
+        return new self(new ListTemplatesRequest($cursor));
     }
 
     private static function createListToolsRequest(array $params): self {
