@@ -51,10 +51,19 @@ class ReadResourceRequestParams extends RequestParams {
     }
 
     public function jsonSerialize(): mixed {
-        return array_merge(
-            parent::jsonSerialize(),
+        // Get parent data
+        $parentData = parent::jsonSerialize();
+        if ($parentData instanceof \stdClass) {
+            $parentData = (array)$parentData;
+        }
+
+        // Merge with local fields
+        $merged = array_merge(
+            $parentData,
             ['uri' => $this->uri],
             $this->extraFields
         );
+
+        return !empty($merged) ? $merged : new \stdClass();
     }
 }

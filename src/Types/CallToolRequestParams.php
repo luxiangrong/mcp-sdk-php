@@ -60,11 +60,15 @@ class CallToolRequestParams extends RequestParams {
                 new \stdClass() : $this->arguments
         ];
 
-        // Merge with parent data (which includes _meta if present)
-        return array_merge(
-            parent::jsonSerialize(),
-            $data,
-            $this->extraFields
-        );
+        // Get parent data
+        $parentData = parent::jsonSerialize();
+        if ($parentData instanceof \stdClass) {
+            $parentData = (array)$parentData;
+        }
+
+        // Merge parent, our own data, and extraFields
+        $merged = array_merge($parentData, $data, $this->extraFields);
+
+        return !empty($merged) ? $merged : new \stdClass();
     }
 }

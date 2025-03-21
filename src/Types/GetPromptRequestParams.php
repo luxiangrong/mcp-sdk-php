@@ -67,8 +67,13 @@ class GetPromptRequestParams extends RequestParams {
         
         // Get base class serialized data (including _meta)
         $baseData = parent::jsonSerialize();
-        
+        if ($baseData instanceof \stdClass) {
+            $baseData = (array) $baseData;
+        }
+
         // Merge everything together
-        return array_merge($baseData, $data, $this->extraFields);
+        $merged = array_merge($baseData, $data, $this->extraFields);
+
+        return !empty($merged) ? $merged : new \stdClass();
     }
 }

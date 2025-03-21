@@ -64,7 +64,16 @@ class CompleteRequestParams extends RequestParams
             'ref' => $this->ref,
         ];
         
-        // Merge extra fields, plus _meta if you use it
-        return array_merge($data, parent::jsonSerialize());
+        // Get parent data
+        $parentData = parent::jsonSerialize();
+
+        // If parentData is a stdClass (i.e. empty), cast to array so array_merge won't error
+        if ($parentData instanceof \stdClass) {
+            $parentData = (array)$parentData;
+        }
+
+        $merged = array_merge($data, $parentData);
+
+        return !empty($merged) ? $merged : new \stdClass();
     }
 }

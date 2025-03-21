@@ -323,8 +323,8 @@ abstract class BaseSession {
         
         $params = $message->params ?? [];
         if (is_object($params)) {
-            // Convert object to array
-            $params = $params->jsonSerialize(); 
+            // Force cast to array
+            $params = (array) $params->jsonSerialize();
         }
         
         $request = $requestClass::fromMethodAndParams($message->method, $params);
@@ -340,8 +340,8 @@ abstract class BaseSession {
         
         $params = $message->params ?? [];
         if (is_object($params)) {
-            // Convert object to array
-            $params = $params->jsonSerialize();
+            // Force cast to array
+            $params = (array) $params->jsonSerialize();
         }
     
         $notification = $notificationClass::fromMethodAndParams($message->method, $params);
