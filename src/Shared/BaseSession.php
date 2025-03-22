@@ -263,9 +263,22 @@ abstract class BaseSession {
             // Validate request
             $request->validate();
 
+            $paramsArray = [];
+            if ($innerMessage->params instanceof \Mcp\Types\McpModel) {
+                // Convert to array. This ensures even empty \stdClass is cast to [].
+                $serialized = $innerMessage->params->jsonSerialize();
+                if ($serialized instanceof \stdClass) {
+                    $serialized = (array) $serialized;
+                }
+                $paramsArray = (array) $serialized; 
+            } elseif (is_array($innerMessage->params)) {
+                $paramsArray = $innerMessage->params;
+            }
+
+            // Now pass the entire param array into RequestResponder
             $responder = new RequestResponder(
                 requestId: $innerMessage->id,
-                params: $innerMessage->params->_meta ?? [],
+                params: $paramsArray,
                 request: $request,
                 session: $this
             );
