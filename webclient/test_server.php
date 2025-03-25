@@ -27,7 +27,8 @@
  * A MCP server with example prompts, tools, and resources for testing
  */
 
-require 'vendor/autoload.php';
+define('BASE_PATH', dirname(__DIR__));
+require BASE_PATH . '/vendor/autoload.php';
 
 use Mcp\Server\Server;
 use Mcp\Server\ServerRunner;
