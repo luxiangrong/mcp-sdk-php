@@ -333,6 +333,7 @@ class StdioServerTransport implements Transport {
             // Handle partial writes by re-buffering the unwritten part
             if ($written < strlen($data)) {
                 $this->writeBuffer = [substr($data, $written), ...$this->writeBuffer];
+            } else {
                 break;
             }
         }
