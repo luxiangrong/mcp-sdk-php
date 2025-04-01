@@ -2,6 +2,10 @@
 
 This package provides a PHP implementation of the [Model Context Protocol](https://modelcontextprotocol.io), allowing applications to provide context for LLMs in a standardized way. It separates the concerns of providing context from the actual LLM interaction.
 
+## Dev Branch
+
+This is the dev branch for v2.0 of the MCP SDK for PHP. It will implement the 2025-03-26 revision of the MCP Spec, while v1.0 will continue receiving any necessary bug fixes for supporting the 2024-11-05 version of the spec.
+
 ## Overview
 
 This PHP SDK implements the full MCP specification, making it easy to:
@@ -19,7 +23,7 @@ This SDK is primarily targeted at developers working on frontier AI integration 
 You can install the package via composer:
 
 ```bash
-composer require logiscape/mcp-sdk-php
+composer require logiscape/mcp-sdk-php:dev-2.0-dev
 ```
 
 ### Requirements
