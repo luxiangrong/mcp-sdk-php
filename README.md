@@ -1,5 +1,7 @@
 # Model Context Protocol SDK for PHP
 
+English | [中文](README.zh-CN.md)
+
 This package provides a PHP implementation of the [Model Context Protocol](https://modelcontextprotocol.io), allowing applications to provide context for LLMs in a standardized way. It separates the concerns of providing context from the actual LLM interaction.
 
 ## Dev Branch
