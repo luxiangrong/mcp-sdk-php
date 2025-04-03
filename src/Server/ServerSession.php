@@ -71,6 +71,7 @@ class ServerSession extends BaseSession {
     private InitializationState $initializationState = InitializationState::NotInitialized;
     private ?InitializeRequestParams $clientParams = null;
     private LoggerInterface $logger;
+    private string $negotiatedProtocolVersion = Version::LATEST_PROTOCOL_VERSION;
 
     public function __construct(
         private readonly Transport $transport,
@@ -241,20 +242,47 @@ class ServerSession extends BaseSession {
         /** @var InitializeRequestParams $params */
         $params = $request->getRequest()->params;
         $this->clientParams = $params;
-
+    
+        // Get the client's requested protocol version
+        $clientProtocolVersion = $params->protocolVersion;
+        
+        // Negotiate the protocol version
+        $this->negotiatedProtocolVersion = $this->negotiateProtocolVersion($clientProtocolVersion);
+        
         $result = new InitializeResult(
-            protocolVersion: Version::LATEST_PROTOCOL_VERSION,
+            protocolVersion: $this->negotiatedProtocolVersion,
             capabilities: $this->initOptions->capabilities,
             serverInfo: new Implementation(
                 name: $this->initOptions->serverName,
                 version: $this->initOptions->serverVersion
             )
         );
-
+    
         $respond($result);
-
+    
         $this->initializationState = InitializationState::Initialized;
-        $this->logger->info('Initialization complete.');
+        $this->logger->info('Initialization complete with protocol version: ' . $this->negotiatedProtocolVersion);
+    }
+    
+    /**
+     * Negotiate the protocol version based on the client's requested version.
+     */
+    private function negotiateProtocolVersion(string $clientRequestedVersion): string {
+        // If the client requests the latest version we support, return it
+        if ($clientRequestedVersion === Version::LATEST_PROTOCOL_VERSION) {
+            return Version::LATEST_PROTOCOL_VERSION;
+        }
+        
+        // If the client requests a version we support, return it
+        if (in_array($clientRequestedVersion, Version::SUPPORTED_PROTOCOL_VERSIONS)) {
+            return $clientRequestedVersion;
+        }
+        
+        // If the client requests an unsupported version, fallback to the most appropriate one
+        // For now, we'll use the latest version we support
+        $this->logger->info('Client requested unsupported protocol version: ' . $clientRequestedVersion . 
+                            '. Using latest supported version: ' . Version::LATEST_PROTOCOL_VERSION);
+        return Version::LATEST_PROTOCOL_VERSION;
     }
 
     /**
@@ -353,6 +381,44 @@ class ServerSession extends BaseSession {
      */
     public function sendPromptListChanged(): void {
         $this->writeNotification('notifications/prompts/list_changed');
+    }
+
+    /**
+     * Get the negotiated protocol version.
+     *
+     * @throws RuntimeException If the session has not been initialized yet.
+     *
+     * @return string The negotiated protocol version.
+     */
+    public function getNegotiatedProtocolVersion(): string {
+        if ($this->initializationState !== InitializationState::Initialized) {
+            throw new RuntimeException('Session not yet initialized');
+        }
+        return $this->negotiatedProtocolVersion;
+    }
+
+    /**
+     * Check if the client supports a specific feature based on the negotiated protocol version.
+     *
+     * @param string $feature The feature to check for.
+     *
+     * @return bool True if the client supports the feature.
+     */
+    public function clientSupportsFeature(string $feature): bool {
+        if ($this->initializationState !== InitializationState::Initialized) {
+            return false;
+        }
+        
+        switch ($feature) {
+            case 'batch_messages':
+            case 'audio_content':
+            case 'annotations':
+            case 'tool_annotations':
+            case 'progress_message':
+                return version_compare($this->negotiatedProtocolVersion, '2025-03-26', '>=');
+            default:
+                return false;
+        }
     }
 
     /**

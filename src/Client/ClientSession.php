@@ -90,6 +90,9 @@ class ClientSession extends BaseSession {
     /** @var float|null */
     private ?float $readTimeout = null;
 
+    /** @var string|null */
+    private ?string $negotiatedProtocolVersion = null;
+
     /**
      * ClientSession constructor.
      *
@@ -151,6 +154,8 @@ class ClientSession extends BaseSession {
             );
         }
 
+        $this->negotiatedProtocolVersion = $result->protocolVersion;
+
         // Send InitializedNotification
         $initializedNotification = new InitializedNotification();
         $this->sendNotification($initializedNotification);
@@ -179,6 +184,44 @@ class ClientSession extends BaseSession {
     }
 
     /**
+     * Get the negotiated protocol version.
+     *
+     * @throws RuntimeException If the session has not been initialized yet.
+     *
+     * @return string The negotiated protocol version.
+     */
+    public function getNegotiatedProtocolVersion(): string {
+        if ($this->negotiatedProtocolVersion === null) {
+            throw new RuntimeException('Session not yet initialized');
+        }
+        return $this->negotiatedProtocolVersion;
+    }
+
+    /**
+     * Check if the negotiated protocol version supports a specific feature.
+     *
+     * @param string $feature The feature to check for.
+     *
+     * @return bool True if the feature is supported.
+     */
+    public function supportsFeature(string $feature): bool {
+        if ($this->negotiatedProtocolVersion === null) {
+            return false;
+        }
+        
+        switch ($feature) {
+            case 'batch_messages':
+            case 'audio_content':
+            case 'annotations':
+            case 'tool_annotations':
+            case 'progress_message':
+                return version_compare($this->negotiatedProtocolVersion, '2025-03-26', '>=');
+            default:
+                return false;
+        }
+    }
+
+    /**
      * Send a PingRequest to the server.
      *
      * @throws RuntimeException If the session is not initialized or if sending the request fails.
@@ -192,17 +235,48 @@ class ClientSession extends BaseSession {
         return $this->sendRequest($pingRequest, EmptyResult::class);
     }
 
+    /**
+     * Send a progress notification to the server.
+     *
+     * @param ProgressToken $progressToken The progress token.
+     * @param float $progress The progress value.
+     * @param float|null $total The total value.
+     * @param string|null $message The message to send.
+     *
+     * @throws RuntimeException If the session is not initialized or if sending the notification fails.
+     *
+     * @return void
+     */
     public function sendProgressNotification(
         ProgressToken $progressToken,
         float $progress,
-        ?float $total = null
+        ?float $total = null,
+        ?string $message = null
     ): void {
-        $params = new \Mcp\Types\ProgressNotificationParams(
+        $this->ensureInitialized();
+        
+        $params = [
+            'progressToken' => $progressToken,
+            'progress' => $progress
+        ];
+        
+        if ($total !== null) {
+            $params['total'] = $total;
+        }
+        
+        // Only include message field for servers that support it
+        if ($message !== null && $this->supportsFeature('progress_message')) {
+            $params['message'] = $message;
+        }
+        
+        $notificationParams = new \Mcp\Types\ProgressNotificationParams(
             progressToken: $progressToken,
             progress: $progress,
-            total: $total
+            total: $total,
+            message: $this->supportsFeature('progress_message') ? $message : null
         );
-        $notification = new \Mcp\Types\ProgressNotification($params);
+        
+        $notification = new \Mcp\Types\ProgressNotification($notificationParams);
         $this->sendNotification($notification);
     }
 

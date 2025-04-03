@@ -321,6 +321,20 @@ class Server {
     public function setSession(ServerSession $session): void {
         $this->session = $session;
     }
+
+    /**
+     * Checks if the connected client supports a specific feature.
+     *
+     * @param string $feature The feature to check.
+     * @return bool True if the feature is supported.
+     */
+    public function clientSupportsFeature(string $feature): bool {
+        if (!$this->session) {
+            return false;
+        }
+        
+        return $this->session->clientSupportsFeature($feature);
+    }
 }
 
 /**
