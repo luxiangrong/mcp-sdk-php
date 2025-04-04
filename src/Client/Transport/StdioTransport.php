@@ -39,6 +39,8 @@ use Mcp\Types\JSONRPCRequest;
 use Mcp\Types\JSONRPCNotification;
 use Mcp\Types\JSONRPCResponse;
 use Mcp\Types\JSONRPCError;
+use Mcp\Types\JSONRPCBatchRequest;
+use Mcp\Types\JSONRPCBatchResponse;
 use Mcp\Types\RequestId;
 use Mcp\Types\JsonRpcErrorObject;
 
@@ -157,23 +159,63 @@ class StdioTransport {
             }
 
             /**
-             * Instantiate a JsonRpcMessage from decoded data.
+             * Instantiates a JsonRpcMessage from an array of JSON-RPC data.
              *
-             * @param array $data The decoded JSON data.
+             * This method handles both single JSON-RPC objects and batch requests/responses.
              *
-             * @return JsonRpcMessage The instantiated JsonRpcMessage object.
+             * @param array $data The JSON-RPC data to instantiate.
              *
-             * @throws InvalidArgumentException If the message structure is invalid.
+             * @return JsonRpcMessage The instantiated JsonRpcMessage.
+             *
+             * @throws InvalidArgumentException If the JSON-RPC data is invalid.
              */
             private function instantiateJsonRpcMessage(array $data): JsonRpcMessage {
+                // 1) Check if top-level is an array => potential batch
+                if ($this->isListArray($data)) {
+                    // parse each item as if single
+                    $subMessages = [];
+                    foreach ($data as $item) {
+                        // parse each sub-item via the same logic you’d use for single messages
+                        // but we’ll do that in a small helper for clarity:
+                        $subMessages[] = $this->instantiateSingleMessage($item);
+                    }
+                    
+                    // Heuristic: if the first item is a request or notification => assume a batch request
+                    // otherwise => assume a batch response
+                    $firstVariant = $subMessages[0]->message;
+                    
+                    if ($firstVariant instanceof \Mcp\Types\JSONRPCRequest ||
+                        $firstVariant instanceof \Mcp\Types\JSONRPCNotification) 
+                    {
+                        return new JsonRpcMessage(new \Mcp\Types\JSONRPCBatchRequest($subMessages));
+                    } else {
+                        // Otherwise assume response/error
+                        return new JsonRpcMessage(new \Mcp\Types\JSONRPCBatchResponse($subMessages));
+                    }
+                }
+                
+                // 2) Otherwise, parse single object as you already do
+                return $this->instantiateSingleMessage($data);
+            }
+            
+            /**
+             * Helper to parse a single JSON-RPC object (request/notification/response/error).
+             *
+             * @param array $data The JSON-RPC data to instantiate.
+             *
+             * @return JsonRpcMessage The instantiated JsonRpcMessage.
+             *
+             * @throws InvalidArgumentException If the JSON-RPC data is invalid.
+             */
+            private function instantiateSingleMessage(array $data): JsonRpcMessage {
                 if (!isset($data['jsonrpc']) || $data['jsonrpc'] !== '2.0') {
                     throw new InvalidArgumentException('Invalid JSON-RPC version.');
                 }
-
+            
+                // request/notification
                 if (isset($data['method'])) {
-                    // It's a Request or Notification
                     if (isset($data['id'])) {
-                        // It's a Request
+                        // request
                         return new JsonRpcMessage(new JSONRPCRequest(
                             jsonrpc: '2.0',
                             id: new RequestId($data['id']),
@@ -181,39 +223,46 @@ class StdioTransport {
                             params: $data['params'] ?? null
                         ));
                     } else {
-                        // It's a Notification
+                        // notification
                         return new JsonRpcMessage(new JSONRPCNotification(
                             jsonrpc: '2.0',
                             method: $data['method'],
                             params: $data['params'] ?? null
                         ));
                     }
-                } elseif (isset($data['result']) || isset($data['error'])) {
-                    // It's a Response or Error
-                    if (isset($data['error'])) {
-                        // It's an Error
-                        $errorData = $data['error'];
-                        return new JsonRpcMessage(new JSONRPCError(
-                            jsonrpc: '2.0',
-                            id: isset($data['id']) ? new RequestId($data['id']) : null,
-                            error: new JsonRpcErrorObject(
-                                code: $errorData['code'],
-                                message: $errorData['message'],
-                                data: $errorData['data'] ?? null
-                            )
-                        ));
-                    } else {
-                        // It's a Response
-                        return new JsonRpcMessage(new JSONRPCResponse(
-                            jsonrpc: '2.0',
-                            id: isset($data['id']) ? new RequestId($data['id']) : null,
-                            result: $data['result']
-                        ));
-                    }
+                }
+            
+                // response/error
+                if (array_key_exists('error', $data)) {
+                    // error response
+                    $errorData = $data['error'];
+                    return new JsonRpcMessage(new JSONRPCError(
+                        jsonrpc: '2.0',
+                        id: isset($data['id']) ? new RequestId($data['id']) : null,
+                        error: new JsonRpcErrorObject(
+                            code: $errorData['code'],
+                            message: $errorData['message'],
+                            data: $errorData['data'] ?? null
+                        )
+                    ));
                 } else {
-                    throw new InvalidArgumentException('Invalid JSON-RPC message structure.');
+                    // success response
+                    return new JsonRpcMessage(new JSONRPCResponse(
+                        jsonrpc: '2.0',
+                        id: isset($data['id']) ? new RequestId($data['id']) : null,
+                        result: $data['result'] ?? null
+                    ));
                 }
             }
+            
+            /**
+             * Simple check if $data is a "list array" (i.e. numeric keys).
+             */
+            private function isListArray(array $data): bool {
+                return array_is_list($data); 
+                // or older PHP: return array_keys($data) === range(0, count($data)-1);
+            }
+            
         };
 
         $writeStream = new class($this->pipes[0], $this->logger, $this->process) extends MemoryStream {
