@@ -33,7 +33,7 @@ namespace Mcp\Types;
  * PromptMessage
  * {
  *   role: Role;
- *   content: TextContent | ImageContent | EmbeddedResource;
+ *   content: TextContent | ImageContent | AudioContent | EmbeddedResource;
  * }
  */
 class PromptMessage implements McpModel {
@@ -41,7 +41,7 @@ class PromptMessage implements McpModel {
 
     public function __construct(
         public readonly Role $role,
-        public readonly TextContent|ImageContent|EmbeddedResource $content,
+        public readonly TextContent|ImageContent|AudioContent|EmbeddedResource $content,
     ) {}
 
     public static function fromArray(array $data): self {
@@ -63,6 +63,7 @@ class PromptMessage implements McpModel {
         $content = match($contentType) {
             'text' => TextContent::fromArray($contentData),
             'image' => ImageContent::fromArray($contentData),
+            'audio' => AudioContent::fromArray($contentData),
             'resource' => EmbeddedResource::fromArray($contentData),
             default => throw new \InvalidArgumentException("Unknown content type: $contentType")
         };

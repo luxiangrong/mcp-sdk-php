@@ -31,12 +31,12 @@ namespace Mcp\Types;
 
 /**
  * Result of a tool call
- * content: (TextContent|ImageContent|EmbeddedResource)[]
+ * content: (TextContent|ImageContent|AudioContent|EmbeddedResource)[]
  * isError?: boolean
  */
 class CallToolResult extends Result {
     /**
-     * @param (TextContent|ImageContent|EmbeddedResource)[] $content
+     * @param (TextContent|ImageContent|AudioContent|EmbeddedResource)[] $content
      */
     public function __construct(
         public readonly array $content,
@@ -72,6 +72,7 @@ class CallToolResult extends Result {
             $content[] = match($type) {
                 'text' => TextContent::fromArray($item),
                 'image' => ImageContent::fromArray($item),
+                'audio' => AudioContent::fromArray($item),
                 'resource' => EmbeddedResource::fromArray($item),
                 default => throw new \InvalidArgumentException("Unknown content type: $type in CallToolResult")
             };
@@ -91,8 +92,8 @@ class CallToolResult extends Result {
     public function validate(): void {
         parent::validate();
         foreach ($this->content as $item) {
-            if (!($item instanceof TextContent || $item instanceof ImageContent || $item instanceof EmbeddedResource)) {
-                throw new \InvalidArgumentException('Tool call content must be TextContent, ImageContent, or EmbeddedResource instances');
+            if (!($item instanceof TextContent || $item instanceof ImageContent || $item instanceof AudioContent || $item instanceof EmbeddedResource)) {
+                throw new \InvalidArgumentException('Tool call content must be TextContent, ImageContent, AudioContent, or EmbeddedResource instances');
             }
             $item->validate();
         }

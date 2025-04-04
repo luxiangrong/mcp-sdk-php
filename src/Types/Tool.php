@@ -36,18 +36,19 @@ class Tool implements McpModel {
         public readonly string $name,
         public readonly ToolInputSchema $inputSchema,
         public ?string $description = null,
+        public ?ToolAnnotations $annotations = null,
     ) {}
 
     public static function fromArray(array $data): self {
         $name = $data['name'] ?? '';
         $description = $data['description'] ?? null;
-
+        $annotations = $data['annotations'] ?? null;
         $inputSchemaData = $data['inputSchema'] ?? [];
-        unset($data['name'], $data['description'], $data['inputSchema']);
+        unset($data['name'], $data['description'], $data['inputSchema'], $data['annotations']);
 
         $inputSchema = ToolInputSchema::fromArray($inputSchemaData);
 
-        $obj = new self($name, $inputSchema, $description);
+        $obj = new self($name, $inputSchema, $description, $annotations);
 
         foreach ($data as $k => $v) {
             $obj->$k = $v; // Tool uses ExtraFieldsTrait
@@ -74,6 +75,9 @@ class Tool implements McpModel {
         ];
         if ($this->description !== null) {
             $data['description'] = $this->description;
+        }
+        if ($this->annotations !== null) {
+            $data['annotations'] = $this->annotations;
         }
         return array_merge($data, $this->extraFields);
     }

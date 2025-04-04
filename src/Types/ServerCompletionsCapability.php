@@ -51,6 +51,6 @@ class ServerCompletionsCapability implements McpModel {
     }
 
     public function jsonSerialize(): mixed {
-        return $this->extraFields; // No defined properties
+        return empty($this->extraFields) ? new \stdClass() : $this->extraFields; // No defined properties
     }
 }

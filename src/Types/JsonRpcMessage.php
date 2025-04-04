@@ -34,6 +34,8 @@ namespace Mcp\Types;
  * - JSONRPCNotification
  * - JSONRPCResponse
  * - JSONRPCError
+ * - JSONRPCBatchRequest
+ * - JSONRPCBatchResponse
  *
  * This class acts as a RootModel for that union.
  */
@@ -44,7 +46,7 @@ class JsonRpcMessage implements McpModel {
      * We store one of the four possible variants.
      */
     public function __construct(
-        public readonly JSONRPCRequest|JSONRPCNotification|JSONRPCResponse|JSONRPCError $message
+        public readonly JSONRPCRequest|JSONRPCNotification|JSONRPCResponse|JSONRPCError|JSONRPCBatchRequest|JSONRPCBatchResponse $message
     ) {}
 
     public function validate(): void {
