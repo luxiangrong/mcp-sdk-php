@@ -71,6 +71,7 @@ class ServerSession extends BaseSession {
     private InitializationState $initializationState = InitializationState::NotInitialized;
     private ?InitializeRequestParams $clientParams = null;
     private LoggerInterface $logger;
+    private string $negotiatedProtocolVersion = Version::LATEST_PROTOCOL_VERSION;
 
     public function __construct(
         private readonly Transport $transport,
@@ -241,20 +242,47 @@ class ServerSession extends BaseSession {
         /** @var InitializeRequestParams $params */
         $params = $request->getRequest()->params;
         $this->clientParams = $params;
-
+    
+        // Get the client's requested protocol version
+        $clientProtocolVersion = $params->protocolVersion;
+        
+        // Negotiate the protocol version
+        $this->negotiatedProtocolVersion = $this->negotiateProtocolVersion($clientProtocolVersion);
+        
         $result = new InitializeResult(
-            protocolVersion: Version::LATEST_PROTOCOL_VERSION,
+            protocolVersion: $this->negotiatedProtocolVersion,
             capabilities: $this->initOptions->capabilities,
             serverInfo: new Implementation(
                 name: $this->initOptions->serverName,
                 version: $this->initOptions->serverVersion
             )
         );
-
+    
         $respond($result);
-
+    
         $this->initializationState = InitializationState::Initialized;
-        $this->logger->info('Initialization complete.');
+        $this->logger->info('Initialization complete with protocol version: ' . $this->negotiatedProtocolVersion);
+    }
+    
+    /**
+     * Negotiate the protocol version based on the client's requested version.
+     */
+    private function negotiateProtocolVersion(string $clientRequestedVersion): string {
+        // If the client requests the latest version we support, return it
+        if ($clientRequestedVersion === Version::LATEST_PROTOCOL_VERSION) {
+            return Version::LATEST_PROTOCOL_VERSION;
+        }
+        
+        // If the client requests a version we support, return it
+        if (in_array($clientRequestedVersion, Version::SUPPORTED_PROTOCOL_VERSIONS)) {
+            return $clientRequestedVersion;
+        }
+        
+        // If the client requests an unsupported version, fallback to the most appropriate one
+        // For now, we'll use the latest version we support
+        $this->logger->info('Client requested unsupported protocol version: ' . $clientRequestedVersion . 
+                            '. Using latest supported version: ' . Version::LATEST_PROTOCOL_VERSION);
+        return Version::LATEST_PROTOCOL_VERSION;
     }
 
     /**
@@ -356,6 +384,149 @@ class ServerSession extends BaseSession {
     }
 
     /**
+     * Get the negotiated protocol version.
+     *
+     * @throws RuntimeException If the session has not been initialized yet.
+     *
+     * @return string The negotiated protocol version.
+     */
+    public function getNegotiatedProtocolVersion(): string {
+        if ($this->initializationState !== InitializationState::Initialized) {
+            throw new RuntimeException('Session not yet initialized');
+        }
+        return $this->negotiatedProtocolVersion;
+    }
+
+    /**
+     * Check if the client supports a specific feature based on the negotiated protocol version.
+     *
+     * @param string $feature The feature to check for.
+     *
+     * @return bool True if the client supports the feature.
+     */
+    public function clientSupportsFeature(string $feature): bool {
+        if ($this->initializationState !== InitializationState::Initialized) {
+            return false;
+        }
+        
+        switch ($feature) {
+            case 'batch_messages':
+            case 'audio_content':
+            case 'annotations':
+            case 'tool_annotations':
+            case 'progress_message':
+                return version_compare($this->negotiatedProtocolVersion, '2025-03-26', '>=');
+            default:
+                return false;
+        }
+    }
+
+    /**
+     * Adapts an outgoing response to be compatible with the client's protocol version.
+     * 
+     * @param mixed $response The response object to adapt
+     * @return mixed The adapted response
+     */
+    public function adaptResponseForClient($response): mixed {
+        // No adaptation needed if client supports the latest version
+        if ($this->negotiatedProtocolVersion === Version::LATEST_PROTOCOL_VERSION) {
+            return $response;
+        }
+        
+        // Apply adaptations based on the response type
+        if ($response instanceof CallToolResult) {
+            return $this->adaptCallToolResult($response);
+        } else if ($response instanceof PromptMessage) {
+            return $this->adaptPromptMessage($response);
+        } else if ($response instanceof Tool) {
+            return $this->adaptTool($response);
+        }
+        // Add more adaptations as needed for other response types
+        
+        return $response;
+    }
+
+    /**
+     * Adapts a CallToolResult to be compatible with older protocol versions.
+     */
+    private function adaptCallToolResult(CallToolResult $result): CallToolResult {
+        if (version_compare($this->negotiatedProtocolVersion, '2025-03-26', '<')) {
+            // Filter out AudioContent which is not supported in older versions
+            $adaptedContent = [];
+            foreach ($result->content as $content) {
+                if (!($content instanceof AudioContent)) {
+                    // Also need to strip annotations if present and not supported
+                    if ($content instanceof TextContent || $content instanceof ImageContent) {
+                        if ($content->annotations !== null) {
+                            // Create a new content object without annotations
+                            if ($content instanceof TextContent) {
+                                $content = new TextContent($content->text);
+                            } else if ($content instanceof ImageContent) {
+                                $content = new ImageContent($content->data, $content->mimeType);
+                            }
+                        }
+                    }
+                    $adaptedContent[] = $content;
+                }
+            }
+            
+            // Create a new result with the adapted content
+            return new CallToolResult(
+                content: $adaptedContent,
+                isError: $result->isError,
+                _meta: $result->_meta
+            );
+        }
+        
+        return $result;
+    }
+
+    /**
+     * Adapts a PromptMessage to be compatible with older protocol versions.
+     */
+    private function adaptPromptMessage(PromptMessage $message): PromptMessage {
+        if (version_compare($this->negotiatedProtocolVersion, '2025-03-26', '<')) {
+            $content = $message->content;
+            
+            // If content is AudioContent, replace it with a text notice
+            if ($content instanceof AudioContent) {
+                $content = new TextContent(
+                    "Audio content was available but couldn't be displayed due to client protocol version limitations."
+                );
+            }
+            
+            // Strip annotations from content if present
+            if (($content instanceof TextContent || $content instanceof ImageContent) && $content->annotations !== null) {
+                if ($content instanceof TextContent) {
+                    $content = new TextContent($content->text);
+                } else if ($content instanceof ImageContent) {
+                    $content = new ImageContent($content->data, $content->mimeType);
+                }
+            }
+            
+            return new PromptMessage($message->role, $content);
+        }
+        
+        return $message;
+    }
+
+    /**
+     * Adapts a Tool to be compatible with older protocol versions.
+     */
+    private function adaptTool(Tool $tool): Tool {
+        if (version_compare($this->negotiatedProtocolVersion, '2025-03-26', '<') && $tool->annotations !== null) {
+            // Create a new tool without annotations
+            return new Tool(
+                name: $tool->name,
+                inputSchema: $tool->inputSchema,
+                description: $tool->description
+            );
+        }
+        
+        return $tool;
+    }
+
+    /**
      * Writes a generic notification to the client.
      *
      * @param string $method The method name of the notification.
@@ -392,6 +563,24 @@ class ServerSession extends BaseSession {
     }
 
     protected function writeMessage(JsonRpcMessage $message): void {
+        $innerMessage = $message->message;
+        
+        // Apply adapters for responses based on client protocol version
+        if ($innerMessage instanceof JSONRPCResponse && $this->initializationState === InitializationState::Initialized) {
+            $responseResult = $innerMessage->result;
+            $adaptedResult = $this->adaptResponseForClient($responseResult);
+            
+            if ($adaptedResult !== $responseResult) {
+                // Create a new response with the adapted result
+                $innerMessage = new JSONRPCResponse(
+                    jsonrpc: $innerMessage->jsonrpc,
+                    id: $innerMessage->id,
+                    result: $adaptedResult
+                );
+                $message = new JsonRpcMessage($innerMessage);
+            }
+        }
+        
         $this->transport->writeMessage($message);
     }
 

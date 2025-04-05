@@ -256,6 +256,17 @@ abstract class BaseSession {
 
         $innerMessage = $message->message;
 
+        // Add support for batch requests and responses
+        if ($innerMessage instanceof JSONRPCBatchRequest || $innerMessage instanceof JSONRPCBatchResponse) {
+            // Process each item in the batch as if it were a standalone JSON-RPC message
+            foreach ($innerMessage->messages as $subMsg) {
+                $this->handleIncomingMessage(
+                    new JsonRpcMessage($subMsg)
+                );
+            }
+            return;
+        }
+
         if ($innerMessage instanceof JSONRPCRequest) {
             // It's a request
             $request = $this->validateIncomingRequest($innerMessage);

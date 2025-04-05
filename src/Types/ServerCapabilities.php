@@ -35,6 +35,7 @@ namespace Mcp\Types;
  * ServerCapabilities {
  *   experimental?: { ... },
  *   logging?: object,
+ *   completions?: object,
  *   prompts?: { listChanged?: boolean },
  *   resources?: { subscribe?: boolean, listChanged?: boolean },
  *   tools?: { listChanged?: boolean },
@@ -44,6 +45,7 @@ namespace Mcp\Types;
 class ServerCapabilities extends Capabilities {
     public function __construct(
         public ?ServerLoggingCapability $logging = null,
+        public ?ServerCompletionsCapability $completions = null,
         public ?ServerPromptsCapability $prompts = null,
         public ?ServerResourcesCapability $resources = null,
         public ?ServerToolsCapability $tools = null,
@@ -66,6 +68,13 @@ class ServerCapabilities extends Capabilities {
         $logging = null;
         if ($loggingData !== null && is_array($loggingData)) {
             $logging = ServerLoggingCapability::fromArray($loggingData);
+        }
+
+        $completionsData = $data['completions'] ?? null;
+        unset($data['completions']);
+        $completions = null;
+        if ($completionsData !== null && is_array($completionsData)) {
+            $completions = ServerCompletionsCapability::fromArray($completionsData);
         }
 
         $promptsData = $data['prompts'] ?? null;
@@ -92,6 +101,7 @@ class ServerCapabilities extends Capabilities {
         // Construct ServerCapabilities object
         $obj = new self(
             logging: $logging,
+            completions: $completions,
             prompts: $prompts,
             resources: $resources,
             tools: $tools,
@@ -121,12 +131,18 @@ class ServerCapabilities extends Capabilities {
         if ($this->logging !== null) {
             $this->logging->validate();
         }
+        if ($this->completions !== null) {
+            $this->completions->validate();
+        }
     }
 
     public function jsonSerialize(): mixed {
         $data = parent::jsonSerialize();
         if ($this->logging !== null) {
             $data['logging'] = $this->logging;
+        }
+        if ($this->completions !== null) {
+            $data['completions'] = $this->completions;
         }
         if ($this->prompts !== null) {
             $data['prompts'] = $this->prompts;

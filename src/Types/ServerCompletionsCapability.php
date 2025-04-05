@@ -11,6 +11,7 @@
  * PHP conversion developed by:
  * - Josh Abbott
  * - Claude 3.5 Sonnet (Anthropic AI model)
+ * - ChatGPT o1 pro mode
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -21,7 +22,7 @@
  * @license    MIT License
  * @link       https://github.com/logiscape/mcp-sdk-php
  *
- * Filename: Types/JsonRpcMessage.php
+ * Filename: Types/ServerCompletionsCapability.php
  */
 
 declare(strict_types=1);
@@ -29,36 +30,27 @@ declare(strict_types=1);
 namespace Mcp\Types;
 
 /**
- * JSON-RPC message is a union of:
- * - JSONRPCRequest
- * - JSONRPCNotification
- * - JSONRPCResponse
- * - JSONRPCError
- * - JSONRPCBatchRequest
- * - JSONRPCBatchResponse
- *
- * This class acts as a RootModel for that union.
+ * Represents the `completions` object in ServerCapabilities.
+ * According to the schema: completions?: object (with arbitrary fields)
  */
-class JsonRpcMessage implements McpModel {
+class ServerCompletionsCapability implements McpModel {
     use ExtraFieldsTrait;
 
-    /**
-     * We store one of the four possible variants.
-     */
-    public function __construct(
-        public readonly JSONRPCRequest|JSONRPCNotification|JSONRPCResponse|JSONRPCError|JSONRPCBatchRequest|JSONRPCBatchResponse $message
-    ) {}
+    public static function fromArray(array $data): self {
+        $obj = new self();
+        foreach ($data as $k => $v) {
+            $obj->$k = $v;
+        }
+
+        $obj->validate();
+        return $obj;
+    }
 
     public function validate(): void {
-        $this->message->validate();
+        // No mandatory fields, arbitrary fields allowed.
     }
 
     public function jsonSerialize(): mixed {
-        // Just serialize the underlying message variant.
-        $data = $this->message->jsonSerialize();
-
-        // Merge any extra fields set directly on JsonRpcMessage (rare)
-        return array_merge((array)$data, $this->extraFields);
+        return empty($this->extraFields) ? new \stdClass() : $this->extraFields; // No defined properties
     }
-
 }

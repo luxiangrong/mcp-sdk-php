@@ -43,6 +43,7 @@ class ProgressNotificationParams implements McpModel {
         public readonly ProgressToken $progressToken,
         public readonly float $progress,
         public ?float $total = null,
+        public ?string $message = null
     ) {}
 
     public function validate(): void {
@@ -59,6 +60,9 @@ class ProgressNotificationParams implements McpModel {
         ];
         if ($this->total !== null) {
             $data['total'] = $this->total;
+        }
+        if ($this->message !== null) {
+            $data['message'] = $this->message;
         }
         return array_merge($data, $this->extraFields);
     }
