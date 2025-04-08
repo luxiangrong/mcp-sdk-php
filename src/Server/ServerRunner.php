@@ -45,7 +45,7 @@ use RuntimeException;
  * Here, we run a loop reading messages from STDIO, passing them to the Server for handling.
  */
 class ServerRunner {
-    private LoggerInterface $logger;
+    protected LoggerInterface $logger;
 
     public function __construct(
         private readonly Server $server,

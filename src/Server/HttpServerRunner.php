@@ -41,20 +41,6 @@ use Psr\Log\NullLogger;
 class HttpServerRunner extends ServerRunner
 {
     /**
-     * Host for built-in server.
-     *
-     * @var string
-     */
-    private string $host;
-    
-    /**
-     * Port for built-in server.
-     *
-     * @var int
-     */
-    private int $port;
-    
-    /**
      * HTTP transport instance.
      *
      * @var HttpServerTransport
@@ -82,10 +68,6 @@ class HttpServerRunner extends ServerRunner
         array $httpOptions = [],
         ?LoggerInterface $logger = null
     ) {
-        // Set default host and port from options
-        $this->host = $httpOptions['host'] ?? 'localhost';
-        $this->port = (int)($httpOptions['port'] ?? 8080);
-        
         // Create HTTP transport
         $this->transport = new HttpServerTransport($httpOptions);
         
@@ -126,15 +108,6 @@ class HttpServerRunner extends ServerRunner
             $this->serverSession->start();
             
             $this->logger->info('HTTP Server started');
-            
-            // If running in CLI mode, start the built-in server
-            if (Environment::isCliMode() && php_sapi_name() === 'cli') {
-                $this->startBuiltInServer();
-            } else {
-                // For non-CLI environments, just setup the transport and return
-                // The actual handling happens via handleRequest() calls
-                $this->logger->info('HTTP Server ready for requests');
-            }
         } catch (\Exception $e) {
             $this->logger->error('Server error: ' . $e->getMessage());
             $this->stop();
@@ -232,110 +205,4 @@ class HttpServerRunner extends ServerRunner
         return $this->serverSession;
     }
     
-    /**
-     * Start built-in PHP web server for development.
-     *
-     * @return void
-     */
-    private function startBuiltInServer(): void
-    {
-        $this->logger->info(sprintf('Starting built-in server at http://%s:%d', $this->host, $this->port));
-        
-        if (!function_exists('pcntl_fork')) {
-            $this->logger->error('PCNTL extension not available, cannot start built-in server');
-            return;
-        }
-        
-        // Create router file if it doesn't exist
-        $routerPath = sys_get_temp_dir() . '/mcp_http_router.php';
-        if (!file_exists($routerPath)) {
-            $routerCode = <<<PHP
-<?php
-// MCP HTTP Server Router
-\$requestUri = parse_url(\$_SERVER['REQUEST_URI'], PHP_URL_PATH);
-
-// Handle MCP endpoint
-if (\$requestUri === '/mcp') {
-    require __DIR__ . '/mcp_http_runner.php';
-    exit;
-}
-
-// Return 404 for other paths
-http_response_code(404);
-echo 'Not found';
-PHP;
-            file_put_contents($routerPath, $routerCode);
-        }
-        
-        // Create runner file
-        $runnerPath = sys_get_temp_dir() . '/mcp_http_runner.php';
-        $runnerCode = <<<PHP
-<?php
-// Access global runner instance
-global \$mcpHttpRunner;
-
-if (!\$mcpHttpRunner) {
-    http_response_code(500);
-    echo 'MCP HTTP Server not initialized';
-    exit;
-}
-
-try {
-    \$response = \$mcpHttpRunner->handleRequest();
-    \$mcpHttpRunner->sendResponse(\$response);
-} catch (Exception \$e) {
-    http_response_code(500);
-    echo 'Internal server error: ' . \$e->getMessage();
-}
-PHP;
-        file_put_contents($runnerPath, $runnerCode);
-        
-        // Store global reference to this runner instance
-        $GLOBALS['mcpHttpRunner'] = $this;
-        
-        // Fork process to run the built-in server
-        $pid = pcntl_fork();
-        
-        if ($pid === -1) {
-            // Fork failed
-            $this->logger->error('Failed to fork process for built-in server');
-        } elseif ($pid === 0) {
-            // Child process - run the built-in server
-            $command = sprintf(
-                'php -S %s:%d %s',
-                $this->host,
-                $this->port,
-                escapeshellarg($routerPath)
-            );
-            
-            // Redirect stdout and stderr to /dev/null
-            $command .= ' > /dev/null 2>&1';
-            
-            // Execute server
-            exec($command);
-            exit;
-        } else {
-            // Parent process - continue
-            $this->logger->info(sprintf('Built-in server started at http://%s:%d (PID: %d)', $this->host, $this->port, $pid));
-            
-            // Register shutdown function to stop the server
-            register_shutdown_function(function () use ($pid) {
-                $this->logger->info('Stopping built-in server');
-                posix_kill($pid, SIGTERM);
-            });
-            
-            // Wait for incoming requests
-            while (true) {
-                // Process any pending messages
-                $message = $this->transport->readMessage();
-                if ($message !== null) {
-                    // Handle message
-                    $this->serverSession->handleIncomingMessage($message);
-                }
-                
-                // Sleep to avoid busy waiting
-                usleep(100000); // 100ms
-            }
-        }
-    }
 }
