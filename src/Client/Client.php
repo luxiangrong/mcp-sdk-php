@@ -31,7 +31,8 @@ namespace Mcp\Client;
 
 use Mcp\Client\Transport\StdioServerParameters;
 use Mcp\Client\Transport\StdioTransport;
-use Mcp\Client\Transport\SseTransport;
+use Mcp\Client\Transport\StreamableHttpTransport;
+use Mcp\Client\Transport\HttpConfiguration;
 use Mcp\Client\ClientSession;
 use Mcp\Shared\MemoryStream;
 use Mcp\Types\JsonRpcMessage;
@@ -45,15 +46,15 @@ use InvalidArgumentException;
  *
  * Main client class for MCP communication.
  *
- * The client can connect to a server via STDIO or SSE, initialize a session,
+ * The client can connect to a server via STDIO or HTTP, initialize a session,
  * and start a receive loop to process incoming messages.
  */
 class Client {
     /** @var ClientSession|null */
     private ?ClientSession $session = null;
 
-    /** @var StdioTransport|null */
-    private ?StdioTransport $transport = null;
+    /** @var StdioTransport|StreamableHttpTransport|null */
+    private $transport = null;
 
     /** @var LoggerInterface */
     private LoggerInterface $logger;
@@ -71,14 +72,16 @@ class Client {
     }
 
     /**
-     * Connect to an MCP server using either STDIO or SSE.
+     * Connect to an MCP server using either STDIO or HTTP/HTTPS.
      *
-     * If commandOrUrl is an HTTP(S) URL, it uses SSE transport.
+     * If commandOrUrl is an HTTP(S) URL, it uses the StreamableHttpTransport.
      * Otherwise, it assumes it's a command and uses STDIO transport.
      *
      * @param string      $commandOrUrl The command to execute or the HTTP(S) URL.
-     * @param array       $args         Arguments for the command (if using STDIO transport).
-     * @param array|null  $env          Environment variables for the command (if using STDIO transport).
+     * @param array       $args         Arguments for the command (if using STDIO transport)
+     *                                  or HTTP headers (if using HTTP transport).
+     * @param array|null  $env          Environment variables for the command (if using STDIO transport)
+     *                                  or HTTP configuration options (if using HTTP transport).
      * @param float|null  $readTimeout  Timeout for reading messages.
      *
      * @throws InvalidArgumentException If the command or URL is invalid.
@@ -96,15 +99,36 @@ class Client {
 
         try {
             if (isset($urlParts['scheme']) && in_array(strtolower($urlParts['scheme']), ['http', 'https'], true)) {
-                // Use SSE transport for HTTP(S) URLs
-                $this->logger->info("Connecting to SSE endpoint: {$commandOrUrl}");
-                $transport = new SseTransport(
-                    url: $commandOrUrl,
-                    headers: [],            // Add custom headers if needed
-                    timeout: 5.0,           // Connection timeout
-                    sseReadTimeout: 300.0,  // SSE read timeout
+                // Use HTTP transport for HTTP(S) URLs
+                $this->logger->info("Connecting to HTTP endpoint: {$commandOrUrl}");
+                
+                // Process HTTP-specific options
+                $headers = $args ?? []; // For HTTP, args are used as headers
+                $httpOptions = $env ?? []; // For HTTP, env is used for HTTP options
+                
+                // Create HTTP configuration
+                $httpConfig = new HttpConfiguration(
+                    endpoint: $commandOrUrl,
+                    headers: $headers,
+                    connectionTimeout: $httpOptions['connectionTimeout'] ?? 30.0,
+                    readTimeout: $httpOptions['readTimeout'] ?? 60.0,
+                    sseIdleTimeout: $httpOptions['sseIdleTimeout'] ?? 300.0,
+                    enableSse: $httpOptions['enableSse'] ?? true,
+                    maxRetries: $httpOptions['maxRetries'] ?? 3,
+                    retryDelay: $httpOptions['retryDelay'] ?? 0.5,
+                    verifyTls: $httpOptions['verifyTls'] ?? true,
+                    caFile: $httpOptions['caFile'] ?? null,
+                    curlOptions: $httpOptions['curlOptions'] ?? []
+                );
+                
+                // Create the HTTP transport
+                $transport = new StreamableHttpTransport(
+                    config: $httpConfig,
+                    autoSse: $httpOptions['autoSse'] ?? true,
                     logger: $this->logger
                 );
+                
+                $this->transport = $transport;
             } else {
                 // Use STDIO transport for commands
                 $this->logger->info("Starting process: {$commandOrUrl}");
@@ -120,15 +144,13 @@ class Client {
             $this->session = new ClientSession(
                 readStream: $readStream,
                 writeStream: $writeStream,
-                readTimeout: $readTimeout
+                readTimeout: $readTimeout,
+                logger: $this->logger
             );
 
             // Initialize the session (e.g., perform handshake if necessary)
             $this->session->initialize();
             $this->logger->info('Session initialized successfully');
-
-            // Currently only synchronous is supported, but this lays the groundwork for async to be implemented in the future
-            //$this->startReceiveLoop();
 
             return $this->session;
         } catch (\Exception $e) {
@@ -169,7 +191,7 @@ class Client {
                 }
 
                 if ($message instanceof JsonRpcMessage) {
-                    $this->logger->info('Received message from server: ' . json_encode($message, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+                    $this->logger->debug('Received message from server: ' . json_encode($message, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
                     // Additional processing can be performed here if necessary
                 }
             } catch (\Exception $e) {
