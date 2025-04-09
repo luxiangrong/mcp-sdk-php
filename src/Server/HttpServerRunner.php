@@ -29,6 +29,7 @@ namespace Mcp\Server;
 use Mcp\Server\Transport\HttpServerTransport;
 use Mcp\Server\Transport\Http\HttpMessage;
 use Mcp\Server\Transport\Http\Environment;
+use Mcp\Server\Transport\Http\SessionStoreInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
@@ -61,15 +62,17 @@ class HttpServerRunner extends ServerRunner
      * @param InitializationOptions $initOptions Server initialization options
      * @param array $httpOptions HTTP transport options
      * @param LoggerInterface|null $logger Logger
+     * @param SessionStoreInterface|null $sessionStore Session store
      */
     public function __construct(
         private readonly Server $server,
         private readonly InitializationOptions $initOptions,
         array $httpOptions = [],
-        ?LoggerInterface $logger = null
+        ?LoggerInterface $logger = null,
+        ?SessionStoreInterface $sessionStore = null
     ) {
         // Create HTTP transport
-        $this->transport = new HttpServerTransport($httpOptions);
+        $this->transport = new HttpServerTransport($httpOptions, $sessionStore);
         
         parent::__construct($server, $initOptions, $logger ?? new NullLogger());
     }

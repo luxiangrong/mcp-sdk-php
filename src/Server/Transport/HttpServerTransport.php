@@ -40,7 +40,9 @@ use Mcp\Server\Transport\Http\Config;
 use Mcp\Server\Transport\Http\Environment;
 use Mcp\Server\Transport\Http\HttpMessage;
 use Mcp\Server\Transport\Http\HttpSession;
+use Mcp\Server\Transport\Http\InMemorySessionStore;
 use Mcp\Server\Transport\Http\MessageQueue;
+use Mcp\Server\Transport\Http\SessionStoreInterface;
 
 /**
  * HTTP transport implementation for MCP server.
@@ -64,6 +66,13 @@ class HttpServerTransport implements Transport
      */
     private MessageQueue $messageQueue;
     
+    /**
+     * Session store.
+     *
+     * @var SessionStoreInterface
+     */
+    private SessionStoreInterface $sessionStore;
+
     /**
      * Active sessions.
      *
@@ -104,12 +113,15 @@ class HttpServerTransport implements Transport
      *
      * @param array $options Configuration options
      */
-    public function __construct(array $options = [])
+    public function __construct(array $options = [], ?SessionStoreInterface $sessionStore = null)
     {
         $this->config = new Config($options);
         $this->messageQueue = new MessageQueue(
             $this->config->get('max_queue_size')
         );
+
+        // If no store passed, default to an in-memory store
+        $this->sessionStore = $sessionStore ?? new InMemorySessionStore();
     }
     
     /**
@@ -318,6 +330,7 @@ class HttpServerTransport implements Transport
             
             // Update session activity
             $session->updateActivity();
+            $this->sessionStore->save($session);
             
             if (!$containsRequests) {
                 // Only notifications or responses, return 202 Accepted
@@ -722,19 +735,31 @@ class HttpServerTransport implements Transport
      */
     public function getSession(string $sessionId): ?HttpSession
     {
-        if (!isset($this->sessions[$sessionId])) {
-            return null;
+        // Check if we already have it cached
+        if (isset($this->sessions[$sessionId])) {
+            $session = $this->sessions[$sessionId];
+            if ($session->isExpired($this->config->get('session_timeout'))) {
+                $session->expire();
+                $this->sessionStore->delete($sessionId);
+                unset($this->sessions[$sessionId]);
+                return null;
+            }
+            return $session;
         }
-        
-        $session = $this->sessions[$sessionId];
-        
-        // Check if the session has expired
-        if ($session->isExpired($this->config->get('session_timeout'))) {
+
+        // Otherwise, try loading from store
+        $session = $this->sessionStore->load($sessionId);
+        if ($session && !$session->isExpired($this->config->get('session_timeout'))) {
+            $this->sessions[$sessionId] = $session;
+            return $session;
+        }
+
+        // If expired or not found, return null
+        if ($session) {
             $session->expire();
-            return null;
+            $this->sessionStore->delete($sessionId);
         }
-        
-        return $session;
+        return null;
     }
     
     /**
@@ -746,9 +771,9 @@ class HttpServerTransport implements Transport
     {
         $session = new HttpSession();
         $session->activate();
-        
+
         $this->sessions[$session->getId()] = $session;
-        
+        $this->sessionStore->save($session);
         return $session;
     }
     
@@ -859,4 +884,15 @@ class HttpServerTransport implements Transport
     {
         return $this->config;
     }
+
+    /**
+     * Check if the transport is started.
+     *
+     * @return bool True if the transport is started
+     */ 
+    public function isStarted(): bool
+    {
+        return $this->isStarted;
+    }
+
 }

@@ -39,35 +39,35 @@ class HttpSession
      *
      * @var string
      */
-    private string $id;
+    protected string $id;
     
     /**
      * Session creation timestamp.
      *
      * @var int
      */
-    private int $createdAt;
+    protected int $createdAt;
     
     /**
      * Last activity timestamp.
      *
      * @var int
      */
-    private int $lastActivity;
+    protected int $lastActivity;
     
     /**
      * Session metadata.
      *
      * @var array<string, mixed>
      */
-    private array $metadata = [];
+    protected array $metadata = [];
     
     /**
      * Session state.
      *
      * @var string One of: 'new', 'active', 'expired'
      */
-    private string $state = 'new';
+    protected string $state = 'new';
     
     /**
      * Constructor.
@@ -243,4 +243,23 @@ class HttpSession
             'metadata' => $this->metadata,
         ];
     }
+
+    /**
+     * Create a new session from an array.
+     *
+     * @param array $data Session data
+     * @return self New session instance
+     */
+    public static function fromArray(array $data): self
+    {
+        $sessionId = $data['id'] ?? null;
+        $session = new self($sessionId);
+        $session->createdAt = $data['created_at'] ?? time();
+        $session->lastActivity = $data['last_activity'] ?? time();
+        $session->metadata = $data['metadata'] ?? [];
+        $session->state = $data['state'] ?? 'new';
+
+        return $session;
+    }
+
 }
