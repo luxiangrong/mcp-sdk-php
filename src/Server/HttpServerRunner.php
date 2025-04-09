@@ -75,47 +75,6 @@ class HttpServerRunner extends ServerRunner
     }
     
     /**
-     * Run the server.
-     *
-     * @return void
-     */
-    public function run(): void
-    {
-        // Suppress warnings unless explicitly enabled
-        if (!getenv('MCP_ENABLE_WARNINGS')) {
-            error_reporting(E_ERROR | E_PARSE);
-        }
-        
-        try {
-            // Start the transport
-            $this->transport->start();
-            
-            // Create server session
-            $this->serverSession = new ServerSession(
-                $this->transport,
-                $this->initOptions,
-                $this->logger
-            );
-            
-            // Connect server to session
-            $this->server->setSession($this->serverSession);
-            
-            // Add handlers
-            $this->serverSession->registerHandlers($this->server->getHandlers());
-            $this->serverSession->registerNotificationHandlers($this->server->getNotificationHandlers());
-            
-            // Start session
-            $this->serverSession->start();
-            
-            $this->logger->info('HTTP Server started');
-        } catch (\Exception $e) {
-            $this->logger->error('Server error: ' . $e->getMessage());
-            $this->stop();
-            throw $e;
-        }
-    }
-    
-    /**
      * Handle an HTTP request.
      *
      * @param HttpMessage|null $request Request message (created from globals if null)
@@ -124,7 +83,26 @@ class HttpServerRunner extends ServerRunner
     public function handleRequest(?HttpMessage $request = null): HttpMessage
     {
         if ($this->serverSession === null) {
-            throw new \RuntimeException('Server session not initialized');
+            // Make sure transport is started
+            if (!$this->transport->isStarted()) {
+                $this->transport->start();
+            }
+    
+            $this->serverSession = new ServerSession(
+                $this->transport,
+                $this->initOptions,
+                $this->logger
+            );
+            $this->server->setSession($this->serverSession);
+    
+            // Register handlers for the new session
+            $this->serverSession->registerHandlers($this->server->getHandlers());
+            $this->serverSession->registerNotificationHandlers($this->server->getNotificationHandlers());
+    
+            // Start the session
+            $this->serverSession->start();
+    
+            $this->logger->info('HTTP server session started');
         }
         
         // Create request from globals if not provided

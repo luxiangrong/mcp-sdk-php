@@ -92,9 +92,6 @@ class StandardPhpAdapter
         // Create HTTP server runner
         $serverRunner = new HttpServerRunner($server, $initOptions, $options);
         
-        // Initialize the server runner
-        $serverRunner->run();
-        
         // Create adapter
         return new self($serverRunner);
     }
