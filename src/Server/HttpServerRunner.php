@@ -85,37 +85,28 @@ class HttpServerRunner extends ServerRunner
      */
     public function handleRequest(?HttpMessage $request = null): HttpMessage
     {
+        // If no session yet, create it and register handlers
         if ($this->serverSession === null) {
-            // Make sure transport is started
-            if (!$this->transport->isStarted()) {
-                $this->transport->start();
-            }
-    
-            $this->serverSession = new ServerSession(
+            $this->serverSession = new HttpServerSession(
                 $this->transport,
                 $this->initOptions,
                 $this->logger
             );
             $this->server->setSession($this->serverSession);
-    
-            // Register handlers for the new session
             $this->serverSession->registerHandlers($this->server->getHandlers());
             $this->serverSession->registerNotificationHandlers($this->server->getNotificationHandlers());
-    
-            // Start the session
-            $this->serverSession->start();
-    
-            $this->logger->info('HTTP server session started');
         }
-        
-        // Create request from globals if not provided
-        if ($request === null) {
-            $request = HttpMessage::fromGlobals();
-        }
-        
-        // Process the request
+
+        // 1) Let the transport parse the HTTP request and enqueue messages
         $response = $this->transport->handleRequest($request);
-        
+
+        // 2) Now run the session to process whatever got enqueued
+        if (!$this->serverSession->isInitialized()) {
+            $this->serverSession->start(); 
+            // This calls our startMessageProcessing() once
+        }
+
+        // 3) Return the final HTTP response
         return $response;
     }
     

@@ -74,8 +74,8 @@ class ServerSession extends BaseSession {
     private string $negotiatedProtocolVersion = Version::LATEST_PROTOCOL_VERSION;
 
     public function __construct(
-        private readonly Transport $transport,
-        private readonly InitializationOptions $initOptions,
+        protected readonly Transport $transport,
+        protected readonly InitializationOptions $initOptions,
         ?LoggerInterface $logger = null
     ) {
         $this->logger = $logger ?? new NullLogger();

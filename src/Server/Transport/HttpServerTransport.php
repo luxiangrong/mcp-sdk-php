@@ -224,14 +224,6 @@ class HttpServerTransport implements Transport
      */
     public function handleRequest(HttpMessage $request): HttpMessage
     {
-        if (!$this->isStarted) {
-            try {
-                $this->start();
-            } catch (\RuntimeException $e) {
-                // Already started, continue
-            }
-        }
-        
         // Extract session ID from request headers
         $sessionId = $request->getHeader('Mcp-Session-Id');
         $session = null;
