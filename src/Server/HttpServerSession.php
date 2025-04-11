@@ -53,7 +53,7 @@ class HttpServerSession extends ServerSession
             // Normal HTTP path:
             // Process just one batch, then break.
             while ($this->isInitialized) {
-                $message = $this->readNextMessage();
+                $message = $this->transport->readMessage();
                 if ($message === null) {
                     break; 
                 }
