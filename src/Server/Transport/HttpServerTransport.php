@@ -107,6 +107,13 @@ class HttpServerTransport implements Transport
      * @var int
      */
     private int $sessionCleanupInterval = 300; // 5 minutes
+
+    /**
+     * Last used session.
+     *
+     * @var HttpSession|null
+     */
+    private ?HttpSession $lastUsedSession = null;
     
     /**
      * Constructor.
@@ -261,6 +268,9 @@ class HttpServerTransport implements Transport
         
         // Set current session for this request
         $this->currentSessionId = $session->getId();
+
+        // Set last used session
+        $this->lastUsedSession = $session;
         
         try {
             // Process request based on HTTP method
@@ -768,7 +778,28 @@ class HttpServerTransport implements Transport
         $this->sessionStore->save($session);
         return $session;
     }
-    
+
+    /**
+     * Get the last used session.
+     *
+     * @return HttpSession|null Last used session or null if none
+     */
+    public function getLastUsedSession(): ?HttpSession
+    {
+        return $this->lastUsedSession;
+    }
+
+    /**
+     * Save the last used session.
+     *
+     * @param HttpSession $session Session to save
+     * @return void
+     */
+    public function saveSession(HttpSession $session): void
+    {
+        $this->sessionStore->save($session);
+    }
+
     /**
      * Clean up expired sessions.
      *

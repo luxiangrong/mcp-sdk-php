@@ -31,6 +31,11 @@ namespace Mcp\Server;
 
 use Mcp\Server\ServerSession;
 use Mcp\Shared\BaseSession;
+use Mcp\Types\Implementation;
+use Mcp\Types\ClientCapabilities;
+use Mcp\Types\ClientRootsCapability;
+use Mcp\Server\InitializationState;
+use Mcp\Types\InitializeRequestParams;
 
 class HttpServerSession extends ServerSession
 {
@@ -61,5 +66,72 @@ class HttpServerSession extends ServerSession
             }
             $this->close();
         }
+    }
+
+    public function toArray(): array
+    {
+        return [
+            // InitializationState is an enum; store its integer value
+            'initializationState' => $this->initializationState->value,
+            
+            // $clientParams is an object (InitializeRequestParams)
+            // so convert to an array or JSON
+            'clientParams' => $this->clientParams
+                ? $this->clientParams->jsonSerialize()
+                : null,
+            
+            'negotiatedProtocolVersion' => $this->negotiatedProtocolVersion,
+        ];
+    }
+
+    public static function fromArray(
+        array $data,
+        \Mcp\Server\Transport\Transport $transport,
+        InitializationOptions $initOptions,
+        \Psr\Log\LoggerInterface $logger
+    ): self {
+        // Build a new session object using existing constructor
+        $session = new self($transport, $initOptions, $logger);
+
+        // Restore the fields
+        $session->initializationState = InitializationState::from($data['initializationState']);
+
+        if (!empty($data['clientParams'])) {
+            $clientParamsData = $data['clientParams'];
+    
+            // Reconstruct ClientRootsCapability if roots are present in the data
+            $rootsData = $clientParamsData['capabilities']['roots'] ?? null;
+            $roots = null;
+    
+            if (is_array($rootsData)) {
+                // Instantiate ClientRootsCapability based on roots data
+                $roots = new ClientRootsCapability(
+                    listChanged: $rootsData['listChanged'] ?? false
+                );
+            }
+    
+            // Instantiate ClientCapabilities and pass the roots object
+            $capabilities = new ClientCapabilities($roots);
+    
+            // Instantiate Implementation for clientInfo
+            $clientInfo = new Implementation(
+                name: $clientParamsData['clientInfo']['name'] ?? '',
+                version: $clientParamsData['clientInfo']['version'] ?? ''
+            );
+    
+            // Now instantiate InitializeRequestParams
+            $initParams = new InitializeRequestParams(
+                protocolVersion: $clientParamsData['protocolVersion'] ?? '',
+                capabilities: $capabilities,
+                clientInfo: $clientInfo
+            );
+    
+            $session->clientParams = $initParams;
+        }
+
+        $session->negotiatedProtocolVersion =
+            $data['negotiatedProtocolVersion'] ?? $session->negotiatedProtocolVersion;
+
+        return $session;
     }
 }

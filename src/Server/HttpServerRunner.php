@@ -85,28 +85,50 @@ class HttpServerRunner extends ServerRunner
      */
     public function handleRequest(?HttpMessage $request = null): HttpMessage
     {
-        // If no session yet, create it and register handlers
-        if ($this->serverSession === null) {
-            $this->serverSession = new HttpServerSession(
-                $this->transport,
-                $this->initOptions,
-                $this->logger
-            );
-            $this->server->setSession($this->serverSession);
-            $this->serverSession->registerHandlers($this->server->getHandlers());
-            $this->serverSession->registerNotificationHandlers($this->server->getNotificationHandlers());
-        }
-
         // 1) Let the transport parse the HTTP request and enqueue messages
         $response = $this->transport->handleRequest($request);
 
-        // 2) Now run the session to process whatever got enqueued
-        if (!$this->serverSession->isInitialized()) {
-            $this->serverSession->start(); 
-            // This calls our startMessageProcessing() once
+        // 2) Restore the session if one exists or create a new one
+        $httpSession = $this->transport->getLastUsedSession();
+        if ($httpSession !== null) {
+            // Attempt to restore the higher-level MCP session from the stored array
+            $savedState = $httpSession->getMetadata('mcp_server_session');
+            if (is_array($savedState)) {
+                // Rebuild the HttpServerSession from the array
+                $restored = HttpServerSession::fromArray(
+                    $savedState,
+                    $this->transport,
+                    $this->initOptions,
+                    $this->logger
+                );
+                $this->serverSession = $restored;
+            } else {
+                // No saved session; create a new one if we don't already have one
+                if ($this->serverSession === null) {
+                    $this->serverSession = new HttpServerSession(
+                        $this->transport,
+                        $this->initOptions,
+                        $this->logger
+                    );
+                }
+            }
+
+            // 3) Register the session and handlers
+            $this->server->setSession($this->serverSession);
+            $this->serverSession->registerHandlers($this->server->getHandlers());
+            $this->serverSession->registerNotificationHandlers($this->server->getNotificationHandlers());
+
+            // 4) Now run the session to process whatever got enqueued
+            if (!$this->serverSession->isInitialized()) {
+                $this->serverSession->start();
+            }
+
+            // 5) Store the session
+            $httpSession->setMetadata('mcp_server_session', $this->serverSession->toArray());
+            $this->transport->saveSession($httpSession);
         }
 
-        // 3) Return the final HTTP response
+        // 6) Return the final HTTP response
         return $response;
     }
     

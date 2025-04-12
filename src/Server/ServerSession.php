@@ -68,10 +68,10 @@ enum InitializationState: int {
  * Similar to Python's ServerSession, but synchronous and integrated with our PHP classes.
  */
 class ServerSession extends BaseSession {
-    private InitializationState $initializationState = InitializationState::NotInitialized;
-    private ?InitializeRequestParams $clientParams = null;
-    private LoggerInterface $logger;
-    private string $negotiatedProtocolVersion = Version::LATEST_PROTOCOL_VERSION;
+    protected InitializationState $initializationState = InitializationState::NotInitialized;
+    protected ?InitializeRequestParams $clientParams = null;
+    protected LoggerInterface $logger;
+    protected string $negotiatedProtocolVersion = Version::LATEST_PROTOCOL_VERSION;
 
     public function __construct(
         protected readonly Transport $transport,
