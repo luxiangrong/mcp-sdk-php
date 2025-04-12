@@ -37,7 +37,7 @@ This SDK is primarily targeted at developers working on frontier AI integration 
 You can install the package via composer:
 
 ```bash
-composer require logiscape/mcp-sdk-php:dev-2.0-dev
+composer require logiscape/mcp-sdk-php
 ```
 
 ### Requirements
