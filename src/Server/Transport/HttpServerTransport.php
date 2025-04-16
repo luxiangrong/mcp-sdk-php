@@ -351,8 +351,11 @@ class HttpServerTransport implements Transport
                 // For now, fall back to JSON response
                 return $this->createJsonResponse($session);
             } else {
-                // Standard JSON response
-                return $this->createJsonResponse($session);
+                // Just return a temporary response for now.
+                // The real JSON RPC output will be built AFTER the session processes the queue.
+                return $containsRequests
+                    ? HttpMessage::createEmptyResponse(200)
+                    : HttpMessage::createEmptyResponse(202);
             }
         } catch (\JsonException $e) {
             // JSON parse error
@@ -704,7 +707,7 @@ class HttpServerTransport implements Transport
      * @param HttpSession $session Session
      * @return HttpMessage Response message
      */
-    private function createJsonResponse(HttpSession $session): HttpMessage
+    public function createJsonResponse(HttpSession $session): HttpMessage
     {
         // Get pending messages for the session
         $pendingMessages = $this->messageQueue->flushOutgoing($session->getId(), true);

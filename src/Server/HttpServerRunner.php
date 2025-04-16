@@ -86,7 +86,7 @@ class HttpServerRunner extends ServerRunner
     public function handleRequest(?HttpMessage $request = null): HttpMessage
     {
         // 1) Let the transport parse the HTTP request and enqueue messages
-        $response = $this->transport->handleRequest($request);
+        $this->transport->handleRequest($request);
 
         // 2) Restore the session if one exists or create a new one
         $httpSession = $this->transport->getLastUsedSession();
@@ -123,13 +123,20 @@ class HttpServerRunner extends ServerRunner
                 $this->serverSession->start();
             }
 
-            // 5) Store the session
+            // 5) Build the final HTTP response
+            $response = $this->transport->createJsonResponse($httpSession);
+            $response->setHeader('Mcp-Session-Id', $httpSession->getId());
+
+            // 6) Store the session
             $httpSession->setMetadata('mcp_server_session', $this->serverSession->toArray());
             $this->transport->saveSession($httpSession);
+
+            // 7) Return the final HTTP response
+            return $response;
         }
 
-        // 6) Return the final HTTP response
-        return $response;
+        // No valid session; return a 400 error
+        return HttpMessage::createJsonResponse(['error' => 'No valid session'], 400);
     }
     
     /**
