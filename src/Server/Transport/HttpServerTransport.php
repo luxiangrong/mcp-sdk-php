@@ -272,28 +272,23 @@ class HttpServerTransport implements Transport
         // Set last used session
         $this->lastUsedSession = $session;
         
-        try {
-            // Process request based on HTTP method
-            $response = match (strtoupper($request->getMethod())) {
-                'POST' => $this->handlePostRequest($request, $session),
-                'GET' => $this->handleGetRequest($request, $session),
-                'DELETE' => $this->handleDeleteRequest($request, $session),
-                default => HttpMessage::createJsonResponse(
-                    ['error' => 'Method not allowed'],
-                    405
-                )->setHeader('Allow', 'GET, POST, DELETE')
-            };
-            
-            // Add session ID header to response if we have a session
-            if ($session !== null) {
-                $response->setHeader('Mcp-Session-Id', $session->getId());
-            }
-            
-            return $response;
-        } finally {
-            // Clear current session
-            $this->currentSessionId = null;
+        // Process request based on HTTP method
+        $response = match (strtoupper($request->getMethod())) {
+            'POST' => $this->handlePostRequest($request, $session),
+            'GET' => $this->handleGetRequest($request, $session),
+            'DELETE' => $this->handleDeleteRequest($request, $session),
+            default => HttpMessage::createJsonResponse(
+                ['error' => 'Method not allowed'],
+                405
+            )->setHeader('Allow', 'GET, POST, DELETE')
+        };
+        
+        // Add session ID header to response if we have a session
+        if ($session !== null) {
+            $response->setHeader('Mcp-Session-Id', $session->getId());
         }
+        
+        return $response;
     }
     
     /**
