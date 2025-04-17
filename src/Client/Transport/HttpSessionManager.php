@@ -108,19 +108,21 @@
       */
      public function processResponseHeaders(array $headers, int $statusCode, bool $isInitialization = false): bool {
          // Handle session initialization
+         $normalized = array_change_key_case($headers, CASE_LOWER);
+         $sessionKey = strtolower(self::SESSION_HEADER);
+
          if ($isInitialization) {
              $this->initialized = true;
-             
-             // Extract session ID if present
-             if (isset($headers[self::SESSION_HEADER])) {
-                 $this->sessionId = $headers[self::SESSION_HEADER];
-                 $this->invalidated = false;
+
+             if (isset($normalized[$sessionKey])) {
+                 $this->sessionId    = $normalized[$sessionKey];
+                 $this->invalidated  = false;
                  $this->logger->info("Initialized MCP session with ID: {$this->sessionId}");
              } else {
                  $this->sessionId = null;
                  $this->logger->debug("Server did not provide a session ID during initialization");
              }
-             
+
              return true;
          }
          

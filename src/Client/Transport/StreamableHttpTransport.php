@@ -28,6 +28,10 @@
  
  use Mcp\Shared\MemoryStream;
  use Mcp\Types\JsonRpcMessage;
+ use Mcp\Types\JSONRPCResponse;
+ use Mcp\Types\JSONRPCError;
+ use Mcp\Types\JsonRpcErrorObject;
+ use Mcp\Types\RequestId;
  use Psr\Log\LoggerInterface;
  use Psr\Log\NullLogger;
  use RuntimeException;
@@ -282,6 +286,42 @@
              $this->logger->warning('Session invalidated, client should reinitialize');
          }
          
+         // ENQUEUE the HTTP JSON‑RPC response for the read loop
+         $decoded = json_decode($responseBody, true);
+         if (json_last_error() === JSON_ERROR_NONE) {
+             // Support both single and batch responses
+             $batch = isset($decoded[0]) && is_array($decoded) ? $decoded : [ $decoded ];
+             foreach ($batch as $item) {
+                 // Success response?
+                 if (isset($item['jsonrpc'], $item['id']) && array_key_exists('result', $item)) {
+                     $idObj = new RequestId($item['id']);
+
+                     $inner = new JSONRPCResponse(
+                         jsonrpc: $item['jsonrpc'],
+                         id:      $idObj,
+                         result:  $item['result']
+                     );
+                     $this->pendingMessages[] = new JsonRpcMessage($inner);
+
+                 // Error response?
+                 } elseif (isset($item['jsonrpc'], $item['id'], $item['error'])) {
+                     $err  = $item['error'];
+                     $idObj = new RequestId($item['id']);
+
+                     $inner = new JSONRPCError(
+                         jsonrpc: $item['jsonrpc'],
+                         id:      $idObj,
+                         error:   new JsonRpcErrorObject(
+                             code:    $err['code'],
+                             message: $err['message'],
+                             data:    $err['data'] ?? null
+                         )
+                     );
+                     $this->pendingMessages[] = new JsonRpcMessage($inner);
+                 }
+             }
+         }
+
          return [
              'statusCode' => $statusCode,
              'headers' => $responseHeaders,
@@ -419,6 +459,11 @@
                  if ($message = $this->transport->receiveFromSse()) {
                      return $message;
                  }
+
+                 // Check if we have any pending messages from the HTTP JSON‑RPC response queue
+                 if ($message = $this->transport->receiveFromHttp()) {
+                     return $message;
+                 }
                  
                  // No messages available right now
                  return null;
@@ -476,6 +521,15 @@
          
          // Try to get a message from the SSE connection
          return $this->sseConnection->receiveMessage();
+     }
+
+     /**
+      * Receives a message from the HTTP JSON‑RPC response queue.
+      * 
+      * @return JsonRpcMessage|null The received message or null if none available
+      */
+     public function receiveFromHttp(): ?JsonRpcMessage {
+         return array_shift($this->pendingMessages) ?: null;
      }
      
      /**
