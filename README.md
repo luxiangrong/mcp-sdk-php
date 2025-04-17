@@ -12,12 +12,13 @@ We are currently developing v2.0 of the MCP SDK for PHP, which will implement th
 - Implement protocol version negotiation
 - Create classes for new spec features
 - Add support for JSON-RPC batching
+- Implement HTTP transport
 
 ### In Progress
-- Implement streamable HTTP transport with optional SSE module
+- Implement authorization framework based on OAuth 2.1
 
 ### To Do
-- Implement authorization framework based on OAuth 2.1
+- Explore the feasibility of supporting SSE in PHP environments
 - Fully test new spec features and remote MCP client/server connections over HTTP
 
 ## Overview
