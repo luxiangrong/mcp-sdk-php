@@ -4,29 +4,12 @@ English | [中文](README.zh-CN.md)
 
 This package provides a PHP implementation of the [Model Context Protocol](https://modelcontextprotocol.io), allowing applications to provide context for LLMs in a standardized way. It separates the concerns of providing context from the actual LLM interaction.
 
-## v2.0 Development
-
-We are currently developing v2.0 of the MCP SDK for PHP, which will implement the 2025-03-26 revision of the MCP Spec. Development will be done in the 2.0-dev branch, with merges to the main branch after testing to ensure the SDK is in a functional state. A v2.0 release will be tagged after the 2025-03-26 revision is fully implemented and tested.
-
-### Completed Tasks
-- Implement protocol version negotiation
-- Create classes for new spec features
-- Add support for JSON-RPC batching
-- Implement HTTP transport
-
-### In Progress
-- Implement authorization framework based on OAuth 2.1
-
-### To Do
-- Explore the feasibility of supporting SSE in PHP environments
-- Fully test new spec features and remote MCP client/server connections over HTTP
-
 ## Overview
 
 This PHP SDK implements the full MCP specification, making it easy to:
 * Build MCP clients that can connect to any MCP server
 * Create MCP servers that expose resources, prompts and tools
-* Use standard transports like stdio and SSE
+* Use standard transports like stdio and HTTP
 * Handle all MCP protocol messages and lifecycle events
 
 Based on the official [Python SDK](https://github.com/modelcontextprotocol/python-sdk) for the Model Context Protocol.
@@ -44,7 +27,9 @@ composer require logiscape/mcp-sdk-php
 ### Requirements
 * PHP 8.1 or higher
 * ext-curl
+* ext-json
 * ext-pcntl (optional, recommended for CLI environments)
+* monolog/monolog (optional, used by example clients/servers for logging)
 
 ## Basic Usage
 
@@ -207,237 +192,14 @@ Save this as `example_client.php` and run it:
 php example_client.php
 ```
 
-## Advanced Logging For Debugging
+## Advanced Examples
 
-### Using Logging
+The "examples" directory includes addtional clients and servers for both the STDIO and HTTP transports. All examples are designed to run in the same directory where you installed the SDK.
 
-You can enable detailed logging on the client side, the server side, or both.
+Some examples use monolog for logging, which can be installed via composer:
 
-### Creating an MCP Server With Logging
-
-Here's the previous example MCP server with detailed logging enabled:
-
-```php
-<?php
-
-// A version of the basic example server with extra logging
-
-// Enable comprehensive error logging
-ini_set('display_errors', 0);
-ini_set('display_startup_errors', 0);
-ini_set('log_errors', 1);
-ini_set('error_log', __DIR__ . '/php_errors.log'); // Logs errors to a file
-error_reporting(E_ALL);
-
-require 'vendor/autoload.php';
-
-use Mcp\Server\Server;
-use Mcp\Server\ServerRunner;
-use Mcp\Types\Prompt;
-use Mcp\Types\PromptArgument;
-use Mcp\Types\PromptMessage;
-use Mcp\Types\ListPromptsResult;
-use Mcp\Types\TextContent;
-use Mcp\Types\Role;
-use Mcp\Types\GetPromptResult;
-use Mcp\Types\GetPromptRequestParams;
-
-use Monolog\Logger;
-use Monolog\Handler\StreamHandler;
-use Monolog\Handler\RotatingFileHandler;
-use Monolog\Formatter\LineFormatter;
-
-// Create a logger
-$logger = new Logger('mcp-server');
-
-// Delete previous log
-@unlink(__DIR__ . '/server_log.txt');
-
-// Create a handler that writes to server_log.txt
-$handler = new StreamHandler(__DIR__ . '/server_log.txt', Logger::DEBUG);
-
-// Optional: Create a custom formatter to make logs more readable
-$dateFormat = "Y-m-d H:i:s";
-$output = "[%datetime%] %channel%.%level_name%: %message% %context% %extra%\n";
-$formatter = new LineFormatter($output, $dateFormat);
-$handler->setFormatter($formatter);
-
-// Add the handler to the logger
-$logger->pushHandler($handler);
-
-// Create a server instance
-$server = new Server('example-server', $logger);
-
-// Register prompt handlers
-$server->registerHandler('prompts/list', function($params) {
-    $prompt = new Prompt(
-        name: 'example-prompt',
-        description: 'An example prompt template',
-        arguments: [
-            new PromptArgument(
-                name: 'arg1',
-                description: 'Example argument',
-                required: true
-            )
-        ]
-    );
-    return new ListPromptsResult([$prompt]);
-});
-
-$server->registerHandler('prompts/get', function(GetPromptRequestParams $params) {
-
-    $name = $params->name;
-    $arguments = $params->arguments;
-
-    if ($name !== 'example-prompt') {
-        throw new \InvalidArgumentException("Unknown prompt: {$name}");
-    }
-
-    // Get argument value safely
-    $argValue = $arguments ? $arguments->arg1 : 'none';
-
-    $prompt = new Prompt(
-        name: 'example-prompt',
-        description: 'An example prompt template',
-        arguments: [
-            new PromptArgument(
-                name: 'arg1',
-                description: 'Example argument',
-                required: true
-            )
-        ]
-    );
-
-    return new GetPromptResult(
-        messages: [
-            new PromptMessage(
-                role: Role::USER,
-                content: new TextContent(
-                    text: "Example prompt text with argument: $argValue"
-                )
-            )
-        ],
-        description: 'Example prompt'
-    );
-});
-
-// Create initialization options and run server
-$initOptions = $server->createInitializationOptions();
-$runner = new ServerRunner($server, $initOptions, $logger);
-
-try {
-    $runner->run();
-} catch (\Throwable $e) {
-    echo "An error occurred: " . $e->getMessage() . "\n";
-    $logger->error("Server run failed", ['exception' => $e]);
-}
-```
-
-Save this as `debug_example_server.php`
-
-### Creating an MCP Client With Logging
-
-Here's how to create a client with detailed logging enabled:
-
-```php
-<?php
-
-// A version of the basic example client with extra logging and output
-
-// Enable comprehensive error reporting and logging
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-ini_set('log_errors', 1);
-ini_set('error_log', __DIR__ . '/php_errors.log'); // Logs errors to a file
-error_reporting(E_ALL);
-
-require 'vendor/autoload.php';
-
-use Mcp\Client\Client;
-use Mcp\Client\Transport\StdioServerParameters;
-use Mcp\Types\TextContent;
-
-use Monolog\Logger;
-use Monolog\Handler\StreamHandler;
-use Monolog\Handler\RotatingFileHandler;
-use Monolog\Formatter\LineFormatter;
-
-// Create a logger
-$logger = new Logger('mcp-client');
-
-// Delete previous log
-@unlink(__DIR__ . '/client_log.txt');
-
-// Create a handler that writes to client_log.txt
-$handler = new StreamHandler(__DIR__ . '/client_log.txt', Logger::DEBUG);
-
-// Optional: Create a custom formatter to make logs more readable
-$dateFormat = "Y-m-d H:i:s";
-$output = "[%datetime%] %channel%.%level_name%: %message% %context% %extra%\n";
-$formatter = new LineFormatter($output, $dateFormat);
-$handler->setFormatter($formatter);
-
-// Add the handler to the logger
-$logger->pushHandler($handler);
-
-// Create server parameters for stdio connection
-$serverParams = new StdioServerParameters(
-    command: 'php',  // Executable
-    args: ['debug_example_server.php'],  // File path to the server
-    env: null  // Optional environment variables
-);
-
-echo("Creating client\n");
-
-// Create client instance
-$client = new Client($logger);
-
-try {
-    echo("Starting to connect\n");
-    // Connect to the server using stdio transport
-    $session = $client->connect(
-        commandOrUrl: $serverParams->getCommand(),
-        args: $serverParams->getArgs(),
-        env: $serverParams->getEnv()
-    );
-
-    echo("Starting to get available prompts\n");
-    // List available prompts
-    $promptsResult = $session->listPrompts();
-
-    // Output the list of prompts
-    if (!empty($promptsResult->prompts)) {
-        echo "Available prompts:\n";
-        foreach ($promptsResult->prompts as $prompt) {
-            echo "  - Name: " . $prompt->name . "\n";
-            echo "    Description: " . $prompt->description . "\n";
-            echo "    Arguments:\n";
-            if (!empty($prompt->arguments)) {
-                foreach ($prompt->arguments as $argument) {
-                    echo "      - " . $argument->name . " (" . ($argument->required ? "required" : "optional") . "): " . $argument->description . "\n";
-                }
-            } else {
-                echo "      (None)\n";
-            }
-        }
-    } else {
-        echo "No prompts available.\n";
-    }
-
-} catch (\Exception $e) {
-    echo "Error: " . $e->getMessage() . "\n";
-    exit(1);
-} finally {
-    // Close the server connection
-    if (isset($client)) {
-        $client->close();
-    }
-}
-```
-
-Save this as `debug_example_client.php` and run it:
 ```bash
-php debug_example_client.php
+composer require monolog/monolog
 ```
 
 ## MCP Web Client
@@ -461,6 +223,20 @@ While MCP is usually implemented as a stateful session protocol, a typical PHP-b
 ## Documentation
 
 For detailed information about the Model Context Protocol, visit the [official documentation](https://modelcontextprotocol.io).
+
+## 2025-03-26 Implementation
+
+We are currently implementing the 2025-03-26 revision of the MCP Spec.
+
+### Completed Tasks
+- Implement protocol version negotiation
+- Create classes for new spec features
+- Add support for JSON-RPC batching
+- Implement HTTP transport
+
+### To Do
+- Implement authorization framework based on OAuth 2.1
+- Explore the feasibility of supporting SSE in PHP environments
 
 ## Credits
 
