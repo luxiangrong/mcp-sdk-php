@@ -42,11 +42,19 @@ class Tool implements McpModel {
     public static function fromArray(array $data): self {
         $name = $data['name'] ?? '';
         $description = $data['description'] ?? null;
-        $annotations = $data['annotations'] ?? null;
+        $annotationsData = $data['annotations'] ?? null;
         $inputSchemaData = $data['inputSchema'] ?? [];
         unset($data['name'], $data['description'], $data['inputSchema'], $data['annotations']);
 
         $inputSchema = ToolInputSchema::fromArray($inputSchemaData);
+
+        $annotations = null;
+		// Properly cast annotations to ToolAnnotations object.
+        if ($annotationsData !== null && is_array($annotationsData)) {
+            $annotations = ToolAnnotations::fromArray($annotationsData);
+        } elseif ($annotationsData instanceof ToolAnnotations) {
+            $annotations = $annotationsData;
+        }
 
         $obj = new self($name, $inputSchema, $description, $annotations);
 
