@@ -336,14 +336,3 @@ class Server {
         return $this->session->clientSupportsFeature($feature);
     }
 }
-
-/**
- * NotificationOptions class to specify which capabilities are changed via notifications.
- */
-class NotificationOptions {
-    public function __construct(
-        public bool $promptsChanged = false,
-        public bool $resourcesChanged = false,
-        public bool $toolsChanged = false,
-    ) {}
-}
