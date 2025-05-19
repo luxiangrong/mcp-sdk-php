@@ -22,12 +22,13 @@
  * @license    MIT License
  * @link       https://github.com/logiscape/mcp-sdk-php
  *
- * Filename: Server/ServerSession.php
+ * Filename: Server/InitializationState.php
  */
 
 declare(strict_types=1);
 
 namespace Mcp\Server;
+
 /**
  * Enumeration to represent the initialization state of the server session.
  */
