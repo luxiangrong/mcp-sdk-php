@@ -52,15 +52,6 @@ use RuntimeException;
 use InvalidArgumentException;
 
 /**
- * Enumeration to represent the initialization state of the server session.
- */
-enum InitializationState: int {
-    case NotInitialized = 1;
-    case Initializing = 2;
-    case Initialized = 3;
-}
-
-/**
  * ServerSession manages the MCP server-side session.
  * It sets up initialization and ensures that requests and notifications are
  * handled only after the client has initialized.
