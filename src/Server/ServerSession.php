@@ -294,10 +294,17 @@ class ServerSession extends BaseSession {
             'logger' => $logger
         ];
 
+        $notificationParams = new \Mcp\Types\NotificationParams();
+        foreach ($params as $key => $value) {
+            if ($value !== null) {
+                $notificationParams->$key = $value;
+            }
+        }
+
         $jsonRpcNotification = new JSONRPCNotification(
             jsonrpc: '2.0',
             method: 'notifications/message',
-            params: $params
+            params: $notificationParams
         );
 
         $notification = new JsonRpcMessage($jsonRpcNotification);
@@ -313,10 +320,17 @@ class ServerSession extends BaseSession {
     public function sendResourceUpdated(string $uri): void {
         $params = ['uri' => $uri];
 
+        $notificationParams = new \Mcp\Types\NotificationParams();
+        foreach ($params as $key => $value) {
+            if ($value !== null) {
+                $notificationParams->$key = $value;
+            }
+        }
+
         $jsonRpcNotification = new JSONRPCNotification(
             jsonrpc: '2.0',
             method: 'notifications/resources/updated',
-            params: $params
+            params: $notificationParams
         );
 
         $notification = new JsonRpcMessage($jsonRpcNotification);
@@ -342,10 +356,17 @@ class ServerSession extends BaseSession {
             'total' => $total
         ];
 
+        $notificationParams = new \Mcp\Types\NotificationParams();
+        foreach ($params as $key => $value) {
+            if ($value !== null) {
+                $notificationParams->$key = $value;
+            }
+        }
+
         $jsonRpcNotification = new JSONRPCNotification(
             jsonrpc: '2.0',
             method: 'notifications/progress',
-            params: $params
+            params: $notificationParams
         );
 
         $notification = new JsonRpcMessage($jsonRpcNotification);
@@ -524,10 +545,20 @@ class ServerSession extends BaseSession {
      * @param array|null $params The parameters of the notification.
      */
     private function writeNotification(string $method, ?array $params = null): void {
+        $notificationParams = null;
+        if ($params !== null) {
+            $notificationParams = new \Mcp\Types\NotificationParams();
+            foreach ($params as $key => $value) {
+                if ($value !== null) {
+                    $notificationParams->$key = $value;
+                }
+            }
+        }
+
         $jsonRpcNotification = new JSONRPCNotification(
             jsonrpc: '2.0',
             method: $method,
-            params: $params
+            params: $notificationParams
         );
 
         $notification = new JsonRpcMessage($jsonRpcNotification);
