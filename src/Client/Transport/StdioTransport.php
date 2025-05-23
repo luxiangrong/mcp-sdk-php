@@ -44,6 +44,7 @@ use Mcp\Types\JSONRPCBatchResponse;
 use Mcp\Types\RequestId;
 use Mcp\Types\JsonRpcErrorObject;
 use Mcp\Types\NotificationParams;
+use Mcp\Types\RequestParams;
 use Mcp\Types\Meta;
 
 /**
@@ -218,11 +219,18 @@ class StdioTransport {
                 if (isset($data['method'])) {
                     if (isset($data['id'])) {
                         // request
+                        $params = null;
+                        if (isset($data['params']) && is_array($data['params'])) {
+                            $params = $this->parseRequestParams($data['params']);
+                        } elseif (isset($data['params'])) {
+                            $params = $data['params'];
+                        }
+
                         return new JsonRpcMessage(new JSONRPCRequest(
                             jsonrpc: '2.0',
                             id: new RequestId($data['id']),
                             method: $data['method'],
-                            params: $data['params'] ?? null
+                            params: $params
                         ));
                     } else {
                         // notification
@@ -288,6 +296,24 @@ class StdioTransport {
                 }
 
                 return $notificationParams;
+            }
+
+            /**
+             * Parses request parameters into a RequestParams object.
+             */
+            private function parseRequestParams(array $params): RequestParams {
+                $meta = isset($params['_meta']) && is_array($params['_meta'])
+                    ? $this->metaFromArray($params['_meta'])
+                    : null;
+
+                $requestParams = new RequestParams($meta);
+                foreach ($params as $key => $value) {
+                    if ($key !== '_meta') {
+                        $requestParams->$key = $value;
+                    }
+                }
+
+                return $requestParams;
             }
 
             /**
