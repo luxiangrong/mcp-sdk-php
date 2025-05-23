@@ -220,11 +220,7 @@ abstract class BaseSession {
         $jsonRpcNotification = new JSONRPCNotification(
             jsonrpc: '2.0',
             method: $progressNotification->method,
-            params: [
-                'progressToken' => $progressToken,
-                'progress' => $progress,
-                'total' => $total
-            ]
+            params: $progressNotification->params
         );
 
         $jsonRpcMessage = new JsonRpcMessage($jsonRpcNotification);
