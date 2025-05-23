@@ -32,7 +32,9 @@
  use Mcp\Types\JSONRPCResponse;
  use Mcp\Types\JSONRPCError;
  use Mcp\Types\RequestId;
- use Mcp\Types\JsonRpcErrorObject;
+use Mcp\Types\JsonRpcErrorObject;
+use Mcp\Types\NotificationParams;
+use Mcp\Types\Meta;
  use Psr\Log\LoggerInterface;
  use Psr\Log\NullLogger;
  use RuntimeException;
@@ -543,22 +545,29 @@
          
          if (isset($data['method'])) {
              // Request or notification
-             if (isset($data['id'])) {
-                 // Request
-                 return new JsonRpcMessage(new JSONRPCRequest(
-                     jsonrpc: '2.0',
-                     id: new RequestId($data['id']),
-                     method: $data['method'],
-                     params: $data['params'] ?? null
-                 ));
-             } else {
-                 // Notification
-                 return new JsonRpcMessage(new JSONRPCNotification(
-                     jsonrpc: '2.0',
-                     method: $data['method'],
-                     params: $data['params'] ?? null
-                 ));
-             }
+            if (isset($data['id'])) {
+                // Request
+                return new JsonRpcMessage(new JSONRPCRequest(
+                    jsonrpc: '2.0',
+                    id: new RequestId($data['id']),
+                    method: $data['method'],
+                    params: $data['params'] ?? null
+                ));
+            } else {
+                // Notification
+                $params = null;
+                if (isset($data['params']) && is_array($data['params'])) {
+                    $params = $this->parseNotificationParams($data['params']);
+                } elseif (isset($data['params'])) {
+                    $params = $data['params'];
+                }
+
+                return new JsonRpcMessage(new JSONRPCNotification(
+                    jsonrpc: '2.0',
+                    method: $data['method'],
+                    params: $params
+                ));
+            }
          } elseif (isset($data['id'])) {
              // Response or error
              if (isset($data['error'])) {
@@ -583,9 +592,38 @@
              }
          }
          
-         $this->logger->warning('Invalid JSON-RPC message format in SSE event');
-         return null;
-     }
+        $this->logger->warning('Invalid JSON-RPC message format in SSE event');
+        return null;
+    }
+
+    /**
+     * Parses notification parameters into a NotificationParams object.
+     */
+    private function parseNotificationParams(array $params): NotificationParams {
+        $meta = isset($params['_meta']) && is_array($params['_meta'])
+            ? $this->metaFromArray($params['_meta'])
+            : null;
+
+        $notificationParams = new NotificationParams($meta);
+        foreach ($params as $key => $value) {
+            if ($key !== '_meta') {
+                $notificationParams->$key = $value;
+            }
+        }
+
+        return $notificationParams;
+    }
+
+    /**
+     * Helper to create a Meta object from an associative array.
+     */
+    private function metaFromArray(array $metaArr): Meta {
+        $meta = new Meta();
+        foreach ($metaArr as $key => $value) {
+            $meta->$key = $value;
+        }
+        return $meta;
+    }
      
      /**
       * Receives the next available message from the SSE connection.
