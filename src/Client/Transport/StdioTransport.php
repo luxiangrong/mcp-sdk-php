@@ -43,6 +43,8 @@ use Mcp\Types\JSONRPCBatchRequest;
 use Mcp\Types\JSONRPCBatchResponse;
 use Mcp\Types\RequestId;
 use Mcp\Types\JsonRpcErrorObject;
+use Mcp\Types\NotificationParams;
+use Mcp\Types\Meta;
 
 /**
  * Class StdioTransport
@@ -224,10 +226,17 @@ class StdioTransport {
                         ));
                     } else {
                         // notification
+                        $params = null;
+                        if (isset($data['params']) && is_array($data['params'])) {
+                            $params = $this->parseNotificationParams($data['params']);
+                        } elseif (isset($data['params'])) {
+                            $params = $data['params'];
+                        }
+
                         return new JsonRpcMessage(new JSONRPCNotification(
                             jsonrpc: '2.0',
                             method: $data['method'],
-                            params: $data['params'] ?? null
+                            params: $params
                         ));
                     }
                 }
@@ -259,8 +268,37 @@ class StdioTransport {
              * Simple check if $data is a "list array" (i.e. numeric keys).
              */
             private function isListArray(array $data): bool {
-                return array_is_list($data); 
+                return array_is_list($data);
                 // or older PHP: return array_keys($data) === range(0, count($data)-1);
+            }
+
+            /**
+             * Parses notification parameters into a NotificationParams object.
+             */
+            private function parseNotificationParams(array $params): NotificationParams {
+                $meta = isset($params['_meta']) && is_array($params['_meta'])
+                    ? $this->metaFromArray($params['_meta'])
+                    : null;
+
+                $notificationParams = new NotificationParams($meta);
+                foreach ($params as $key => $value) {
+                    if ($key !== '_meta') {
+                        $notificationParams->$key = $value;
+                    }
+                }
+
+                return $notificationParams;
+            }
+
+            /**
+             * Helper to convert an associative array to a Meta object.
+             */
+            private function metaFromArray(array $metaArr): Meta {
+                $meta = new Meta();
+                foreach ($metaArr as $key => $value) {
+                    $meta->$key = $value;
+                }
+                return $meta;
             }
             
         };
